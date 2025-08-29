@@ -14,7 +14,7 @@ class CheckExtractor:
         remediation_column=10 # column (J)
         
         # Load the workbook
-        workbook = openpyxl.load_workbook(benchmark_xlsx)
+        workbook = openpyxl.load_workbook(benchmark_xlsx, read_only=True)
 
         # Select the benchmark sheet
         sheet = workbook.worksheets[benchmark_sheet]
@@ -49,12 +49,10 @@ class CheckExtractor:
         # Get all params
         for line in cell_value_lines:
             if pattern.match(line):
-                #if (param == "Start") or (param == "Disabled") or (param == "Enabled") or (param == "<numeric value>") or (param == "Machine"):
-                #    param=keys_param[0].split('\\')[-1]
                 reg_key = re.search(r'^(?:HKLM|HKU|HKEY_LOCAL_MACHINE|HKEY_USERS)\\.*', line).group()
                 reg_keys.append(reg_key)
                 # Check duplicated param
-                self.check_duplicate_param(reg_key.split(':', 1)[-1])
+                self.check_duplicate_param(reg_key)
                 no_match = False
         # Check if no match found
         if no_match:
@@ -70,7 +68,10 @@ class CheckExtractor:
         no_match = True
         for line in cell_value_lines:
             if pattern.match(line):
-                check = line.split('\\')[-1]
+                if ":" in line:
+                    check = line.split(":")[-1].strip()
+                else:
+                    check = line.split("\\")[-1].strip()
                 checks.append(check)
                 # Check duplicated param
                 self.check_duplicate_param(check)
@@ -120,8 +121,14 @@ class CheckExtractor:
         # Add check and value to dict
         self.checks_values[checks[0]] = value
 
-    def check_duplicate_param(self, param):
+    def check_duplicate_param(self, regkey):
+        if regkey.startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):
+            param = regkey.split(':', 1)[-1]
+        else:
+            param = regkey
+        
         if param in self.__processed_params:
             if param not in self.not_unique_param:
                 self.not_unique_param.append(param)
-        self.__processed_params.append(param)
+        else:
+            self.__processed_params.append(param)
