@@ -1,12 +1,13 @@
-import openpyxl
-import re
+import openpyxl, re
 
 class CheckExtractor:
     def __init__(self):
-        self.checks = []
-        self.checks_values = {}
-        self.not_unique_param = []
-        self.__processed_params = []
+        self.checks_l = []
+        self.checks_values_d = {}
+        self.not_unique_key_l = []
+        self.__processed_keys_l = []
+        self.__regkey_pattern = re.compile(r'^(HKLM|HKU|HKEY_LOCAL_MACHINE|HKEY_USERS)\\.*', re.MULTILINE)
+        self.__ui_path_pattern = re.compile(r'^(.*\\.*)+$')
 
     def extract_checks_from_xlsx(self, benchmark_xlsx):
         benchmark_sheet=0 # first sheet
@@ -27,63 +28,58 @@ class CheckExtractor:
             cell_value = sheet.cell(row=row, column=audit_column).value
             # Check if string (empty cell are NoneType)
             if isinstance(cell_value, str):
-                reg_keys = self.get_regkeys_in_audit_cell(cell_value)
-                if reg_keys == 404:
+                regkeys_l = self.__get_regkeys_in_audit_cell(cell_value)
+                if not regkeys_l:
                     # Get the cell value at remediation column
                     cell_value = sheet.cell(row=row, column=remediation_column).value
-                    checks = self.get_check_in_remediation_cell(cell_value)
-                    self.checks.append(checks)
-                    self.get_values_in_remediation_cell(cell_value, checks)
+                    ui_paths_l = self.__get_ui_paths_in_remediation_cell(cell_value)
+                    self.checks_l.append(ui_paths_l)
+                    self.__get_values_in_remediation_cell(cell_value, ui_paths_l)
                 else:
-                    self.checks.append(reg_keys)
-                    self.get_values_in_audit_cell(cell_value, reg_keys)
+                    self.checks_l.append(regkeys_l)
+                    self.__get_values_in_audit_cell(cell_value, regkeys_l)
             row+=1
         workbook.close()
 
-    def get_regkeys_in_audit_cell(self, cell_value):
-        pattern = re.compile(r'^(HKLM|HKU|HKEY_LOCAL_MACHINE|HKEY_USERS)\\.*', re.MULTILINE) # Registry key pattern
-        reg_keys=[]
+    def __get_regkeys_in_audit_cell(self, cell_value):
+        regkeys_l = []
 
         cell_value_lines = cell_value.split('\n')
         no_match = True
         # Get all params
         for line in cell_value_lines:
-            if pattern.match(line):
-                reg_key = re.search(r'^(?:HKLM|HKU|HKEY_LOCAL_MACHINE|HKEY_USERS)\\.*', line).group()
-                reg_keys.append(reg_key)
-                # Check duplicated param
-                self.check_duplicate_param(reg_key)
+            if self.__regkey_pattern.match(line):
+                regkey = re.search(r'^(?:HKLM|HKU|HKEY_LOCAL_MACHINE|HKEY_USERS)\\.*', line).group()
+                regkeys_l.append(regkey)
+                # Check duplicated key
+                self.__check_duplicate_key(regkey)
                 no_match = False
         # Check if no match found
         if no_match:
-            return 404
+            return None
         # Return reg keys
-        return reg_keys
+        return regkeys_l
 
-    def get_check_in_remediation_cell(self, cell_value):
-        pattern = re.compile(r'^(.*\\.*)+$') # key pattern
-        checks = []
+    def __get_ui_paths_in_remediation_cell(self, cell_value):
+        ui_paths_l = []
 
         cell_value_lines = cell_value.split('\n')
         no_match = True
         for line in cell_value_lines:
-            if pattern.match(line):
-                if ":" in line:
-                    check = line.split(":")[-1].strip()
-                else:
-                    check = line.split("\\")[-1].strip()
-                checks.append(check)
-                # Check duplicated param
-                self.check_duplicate_param(check)
+            if self.__ui_path_pattern.match(line):
+                ui_path = line.split(':', 1)[-1].strip()
+                ui_paths_l.append(ui_path)
+                # Check duplicated key
+                self.__check_duplicate_key(ui_path)
                 no_match = False
                 break
         # Check if no match found
         if no_match:
-            return 404
+            return None
         # Return checks
-        return checks
+        return ui_paths_l
     
-    def get_values_in_audit_cell(self, cell_value, reg_keys):
+    def __get_values_in_audit_cell(self, cell_value, regkeys_l):
         cell_value_lines = cell_value.split('\n')
         line_values = ""
         
@@ -93,22 +89,22 @@ class CheckExtractor:
                 line_values = line.split('value of', 1)[-1]
                 break
         # For each registry key get value
-        for reg_key in reg_keys:
-            param = reg_key.split(':', 1)[-1]
-            # Check if specific value for param
-            if (param in line_values) and (param != line_values):
-                # Get value for param
+        for regkey in regkeys_l:
+            key = regkey.split(':', 1)[-1]
+            # Check if specific value for key
+            if (key in line_values) and (key != line_values):
+                # Get value for key
                 for part in line_values.split(' and '):
-                    if param in part:
+                    if key in part:
                         # Get value with splits
                         value = part.strip().split(' (')[0].split('value of ')[-1]
                         break
             else:
                 value = line_values.strip()[:-1]
             # Add regkey and value to dict
-            self.checks_values[reg_key] = value
+            self.checks_values_d[regkey] = value
 
-    def get_values_in_remediation_cell(self, cell_value, checks):
+    def __get_values_in_remediation_cell(self, cell_value, ui_paths_l):
         cell_value_lines = cell_value.split('\n')
         line_values = ""
         
@@ -118,17 +114,23 @@ class CheckExtractor:
                 line_values = line.split('UI path to', 1)[-1].split(':', 1)[0]
                 break
         value = line_values.strip()
-        # Add check and value to dict
-        self.checks_values[checks[0]] = value
+        # Add UI path and value to dict
+        self.checks_values_d[ui_paths_l[0]] = value
 
-    def check_duplicate_param(self, regkey):
+    def __check_duplicate_key(self, regkey):
+        # Regkey
         if regkey.startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):
-            param = regkey.split(':', 1)[-1]
+            key = regkey.split(':', 1)[-1]
+        # UI path
         else:
-            param = regkey
-        
-        if param in self.__processed_params:
-            if param not in self.not_unique_param:
-                self.not_unique_param.append(param)
+            # Extract last part of the UI path
+            if ":" in regkey:
+                key = regkey.split(":")[-1].strip()
+            else:
+                key = regkey.split("\\")[-1].strip()
+        # Update list of keys that are not unique
+        if key in self.__processed_keys_l:
+            if key not in self.not_unique_key_l:
+                self.not_unique_key_l.append(key)
         else:
-            self.__processed_params.append(param)
+            self.__processed_keys_l.append(key)

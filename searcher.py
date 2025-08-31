@@ -1,22 +1,21 @@
 import os, mmap, re, chardet
 
 class Searcher:
-    def __init__(self, workdir, not_unique_param):
+    def __init__(self, workdir, not_unique_key_l):
         self.workdir = workdir
-        self.workdir_files = []
-        self.not_unique_param = not_unique_param
+        self.workdir_files_l = []
+        self.__not_unique_key_l = not_unique_key_l
         self.file_size_exclusion = 1000000000 # 1 GB
         self.list_all_files()
 
     def list_all_files(self):
-        file_paths = []
+        file_paths_l = []
         for root, dirs, files in os.walk(self.workdir):
             for file in files:
-                file_paths.append(os.path.join(root, file))
-        self.workdir_files = file_paths
+                file_paths_l.append(os.path.join(root, file))
+        self.workdir_files_l = file_paths_l
     
-    def detect_encoding(self, file_path):
-        """Auto-detect file encoding with BOM detection"""
+    def __detect_encoding(self, file_path):
         with open(file_path, 'rb') as f:
             raw_data = f.read(4)  # Read first 4 bytes to check BOM
             
@@ -39,45 +38,41 @@ class Searcher:
             return result['encoding'] if result['confidence'] > 0.7 else 'utf-8'
     
     def search_keyword_sensitive(self, keyword):
-        """Case sensitive"""
-        file_paths = []
+        file_paths_l = []
 
-        for file in self.workdir_files:
+        for file in self.workdir_files_l:
             try:
                 fsize = os.path.getsize(file)
                 if (fsize == 0) or (fsize > self.file_size_exclusion):
                     continue
-                encoding = self.detect_encoding(file)
+                encoding = self.__detect_encoding(file)
                 with open(file, "r", encoding=encoding, errors='ignore') as f:
-                    with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as s:
-                        if s.find(keyword.encode(encoding)) != -1:
-                            file_paths.append(file)
+                    with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                        if mm.find(keyword.encode(encoding)) != -1:
+                            file_paths_l.append(file)
             except Exception as e:
                 # Print or log errors like permission issues
                 print(f"Skipping {file}: {e}")
-        return file_paths
+        return file_paths_l
     
     def search_keyword_insensitive(self, keyword):
-        """Case insensitive"""
-        file_paths = []
+        file_paths_l = []
         
-        for file in self.workdir_files:
+        for file in self.workdir_files_l:
             try:
                 fsize = os.path.getsize(file)
                 if (fsize == 0) or (fsize > self.file_size_exclusion):
                     continue
-                encoding = self.detect_encoding(file)
-                keyword_bytes = keyword.encode(encoding)
+                encoding = self.__detect_encoding(file)
                 with open(file, "r", encoding=encoding, errors='ignore') as f:
-                    with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as s:
-                        if self.__case_insensitive_find(s, keyword_bytes) != -1:
-                            file_paths.append(file)
+                    with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                        if self.__case_insensitive_find(mm, keyword.encode(encoding)) != -1:
+                            file_paths_l.append(file)
             except Exception as e:
                 # Print or log errors like permission issues
                 print(f"Skipping {file}: {e}")
-        return file_paths
+        return file_paths_l
     
-
     def __case_insensitive_find(self, data, keyword):
         # Converts to lowercase
         data_lower = bytes(data).lower()
@@ -85,14 +80,19 @@ class Searcher:
         return data_lower.find(keyword_lower)
     
     def regkey_to_keyword(self, regkey):
+        # Regkey
         if regkey.startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):
             keyword = regkey.split(":", 1)[-1].strip()
-            # Detect if duplicate
-            if keyword in self.not_unique_param:
+            # Detect if duplicated key
+            if keyword in self.__not_unique_key_l:
+                # Get subkey
                 keyword = regkey.split("\\")[-1].split(":")[0].strip()
                 if keyword == "Parameters":
+                    # Get subkey
                     keyword = regkey.split("\\")[-2].strip()
+        # UI path
         else:
+            # Extract last part of the UI path
             if ":" in regkey:
                 keyword = regkey.split(":")[-1].strip()
             else:

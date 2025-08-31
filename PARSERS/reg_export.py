@@ -3,78 +3,87 @@ import mmap
 class RegExport:
     def __init__(self):
         self.name = 'RegExport'
-        self.parsable_files = ['HKLM.txt', 'HKU.txt', 'HKCU.txt', 'HKCC.txt', 'HKCR.txt']
+        self.parsable_files_l = ['HKLM.txt', 'HKU.txt', 'HKCU.txt', 'HKCC.txt', 'HKCR.txt']
         self.encoding = 'utf-16-le'
         self.new_line = b'\r\x00\n\x00'
 
-    def parse(self, file, regkeys):
-        regkeys_dict_v, regkeys_dict_b = self.regkeys_dicts(regkeys)
-        found_values = {}
+    def parse(self, file, regkeys_l):
+        formatted_regkeys_keys_d, formatted_regkeys_bytes_d, formatted_regkeys_og_regkeys_d = self.__prepare_dicts_for_parsing(regkeys_l)
+        found_values_d = {}
+        found_proofs_d = {}
         with open(file, "r", encoding=self.encoding, errors='ignore') as f:
-            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as s:
+            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 line_start = 0
                 
-                while line_start < len(s):
-                    line_end = self.find_end_of_line(s, line_start)
+                while line_start < len(mm):
+                    line_end = self.__find_end_of_line(mm, line_start)
                     
                     # Extract line bytes
-                    line_bytes = s[line_start:line_end].lower()
+                    line_bytes = mm[line_start:line_end].lower()
                     
                     # Check if any regkey is in this line
-                    for regkey in regkeys_dict_b.keys():
-                        regkeys_to_delete = []
-                        if regkeys_dict_b[regkey] in line_bytes:
+                    for regkey_f in formatted_regkeys_bytes_d.keys():
+                        regkeys_to_delete_l = []
+                        regkey_b = formatted_regkeys_bytes_d[regkey_f]
+
+                        if regkey_b in line_bytes:
                             # Decode line only when we find a match
                             line_content = line_bytes.decode(self.encoding, errors='ignore')
-                            regkey_d = regkeys_dict_b[regkey].decode(self.encoding, errors='ignore')
-                            # Check if exact line
-                            if f'[{regkey_d}]' == line_content:
-                                value = self.extract_value(regkeys_dict_v[regkey], s, line_start, line_end)
+                            subkey = formatted_regkeys_bytes_d[regkey_f].decode(self.encoding, errors='ignore')
+                            # Check if exact subkey in line
+                            if f'{subkey}]' in line_content:
+                                key = formatted_regkeys_keys_d[regkey_f]
+                                value = self.__extract_value(key, mm, line_start, line_end)
                                 # If value is found
                                 if value:
-                                    found_values[regkey] = value
-                                    regkeys_to_delete.append(regkey)
+                                    regkey_og = formatted_regkeys_og_regkeys_d[regkey_f] # Original key
+                                    found_values_d[regkey_og] = value
+                                    found_proofs_d[regkey_og] = file
+                                    regkeys_to_delete_l.append(regkey_f)
                     
                     # Remove found regkey value
-                    for found_regkey in regkeys_to_delete:
-                        del regkeys_dict_b[found_regkey]
-                        del regkeys_dict_v[found_regkey]
+                    for found_regkey in regkeys_to_delete_l:
+                        del formatted_regkeys_keys_d[found_regkey]
+                        del formatted_regkeys_bytes_d[found_regkey]
+                        del formatted_regkeys_og_regkeys_d[found_regkey]
 
-                    if not regkeys_dict_b:
+                    if not formatted_regkeys_bytes_d:
                         break
                     else:
-                        line_start = self.move_to_next_line(s, line_end)
-        return found_values
+                        line_start = self.__move_to_next_line(mm, line_end)
+        return found_values_d, found_proofs_d
     
-    def find_end_of_line(self, s, line_start):
+    def __find_end_of_line(self, mm, line_start):
         # Find end of current line
-        line_end = s.find(self.new_line, line_start)
+        line_end = mm.find(self.new_line, line_start)
         if line_end == -1:
-            line_end = len(s)  # Last line without newline
+            line_end = len(mm)  # Last line without newline
         return line_end
     
-    def move_to_next_line(self, s, line_end):
+    def __move_to_next_line(self, mm, line_end):
         # Move to next line
-        if line_end == len(s):
-            return len(s) # Break while loop
+        if line_end == len(mm):
+            return len(mm) # Break while loop
         line_start = line_end + len(self.new_line)
         return line_start
     
-    def regkeys_dicts(self, regkeys):
-        regkeys_dict_v = {}
-        regkeys_dict_b = {}
+    def __prepare_dicts_for_parsing(self, regkeys_l):
+        formatted_regkeys_keys_d = {}
+        formatted_regkeys_bytes_d = {}
+        formatted_regkeys_og_regkeys_d = {}
         
-        for regkey in regkeys:
-            regkey = self.format_regkey(regkey)
-            regkeys_dict_v[regkey] = regkey.split(':')[-1].lower()
-            regkeys_dict_b[regkey] = regkey.split(':')[0].encode(self.encoding).lower()
-        return regkeys_dict_v, regkeys_dict_b
+        for regkey in regkeys_l:
+            formatted_regkey = self.__format_regkey(regkey)
+            formatted_regkeys_keys_d[formatted_regkey] = formatted_regkey.split(':')[-1].lower()
+            formatted_regkeys_bytes_d[formatted_regkey] = formatted_regkey.split(':')[0].encode(self.encoding).lower()
+            formatted_regkeys_og_regkeys_d[formatted_regkey] = regkey
+        return formatted_regkeys_keys_d, formatted_regkeys_bytes_d, formatted_regkeys_og_regkeys_d
     
-    def format_regkey(self, regkey):
+    def __format_regkey(self, regkey):
         if 'HKLM' in regkey:
             regkey = regkey.replace('HKLM', 'HKEY_LOCAL_MACHINE')
         elif 'HKU' in regkey:
-            regkey = regkey.replace('HKU', 'HKEY_USERS')
+            regkey = regkey.replace('HKU', 'HKEY_USERS').split('\\', 2)[-1]
         elif 'HKCU' in regkey:
             regkey = regkey.replace('HKCU', 'HKEY_CURRENT_USER')
         elif 'HKCC' in regkey:
@@ -84,20 +93,20 @@ class RegExport:
 
         return regkey
     
-    def extract_value(self, param, s, line_start, line_end):
-        while line_start < len(s):
+    def __extract_value(self, key, mm, line_start, line_end):
+        while line_start < len(mm):
             # Start on new line
             line_start = line_end + len(self.new_line)
             
-            line_end = self.find_end_of_line(s, line_start)
+            line_end = self.__find_end_of_line(mm, line_start)
             # Extract line bytes
-            line_bytes = s[line_start:line_end].lower()
+            line_bytes = mm[line_start:line_end].lower()
             line_content = line_bytes.decode(self.encoding, errors='ignore')
             if line_content:
-                if param in line_content:
+                if key in line_content:
                     return line_content.split('=')[-1].split(':')[-1]
                 else:
-                    line_start = self.move_to_next_line(s, line_end)
-            else: # End of registry key block
+                    line_start = self.__move_to_next_line(mm, line_end)
+            else: # End of keys block
                 break
         return None
