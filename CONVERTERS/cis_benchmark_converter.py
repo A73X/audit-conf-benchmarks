@@ -57,10 +57,16 @@ class CisBenchmarkConverter:
             elif line.startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):
                 # Try to repair audit registry key path
                 if index < len(content) - 1:  # Check if there is a next line
-                    if content[index + 1].startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):  # Check if the next line is another registry key
+                    # Check if the next line is another registry key
+                    if content[index + 1].startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):
                         content_string += '\n' + line
                     else:
-                        content_string += '\n' + line + content[index + 1]
+                        # Subkey splitted
+                        if '\\' in content[index + 1]:
+                            content_string += '\n' + line + ' ' + content[index + 1]
+                        # Key splitted
+                        else:
+                            content_string += '\n' + line + content[index + 1]
                         index += 1  # Skip the next line since we've processed it
                 else:
                     content_string += '\n' + line
