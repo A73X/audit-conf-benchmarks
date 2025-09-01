@@ -2,15 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 Class based on "cis_benchmark_converter.py" file from https://github.com/Octomany/cisbenchmarkconverter
-File : cis_benchmark_converter.py
-Author : Maxime Beauchamp
+Original file author : Maxime Beauchamp
 LinkedIn : https://www.linkedin.com/in/maxbeauchamp/ 
 Created : 2024-11-06
+This file has been modified for better regkey extraction and integration
 """
 
 import csv
 import re
-import argparse
 import pdfplumber
 from openpyxl.styles import PatternFill, Font
 from openpyxl.worksheet.datavalidation import DataValidation
