@@ -107,7 +107,6 @@ class CheckExtractor:
                                     'condition_type': 'specific_value',
                                     'parsed_value': {'operator': '==', 'value': specific_value}
                                 }
-                                print(f"{regkey}: {specific_reg_info['parsed_value']}")
                                 self.checks_values_d[regkey] = specific_reg_info
                     else:
                         # Handle normal case (same value for all keys)
