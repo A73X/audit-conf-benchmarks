@@ -110,6 +110,8 @@ class CheckExtractor:
                                 }
                                 self.checks_values_d[regkey] = specific_reg_info
                                 value_extracted = True
+                            else:
+                                value_extracted = False
                     else:
                         # Handle normal case (same value for all keys)
                         for regkey in regkeys_l:
