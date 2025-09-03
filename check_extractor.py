@@ -83,6 +83,7 @@ class CheckExtractor:
         cell_value_lines = cell_value.split('\n')
         line_values = ""
         
+        value_extracted = False
         for line in cell_value_lines:
             if "REG_" in line:
                 
@@ -108,13 +109,15 @@ class CheckExtractor:
                                     'parsed_value': {'operator': '==', 'value': specific_value}
                                 }
                                 self.checks_values_d[regkey] = specific_reg_info
+                                value_extracted = True
                     else:
                         # Handle normal case (same value for all keys)
                         for regkey in regkeys_l:
                             self.checks_values_d[regkey] = reg_info
-            else:
-                for regkey in regkeys_l:
-                    self.checks_values_d[regkey] = None
+                            value_extracted = True
+        if not value_extracted:
+            for regkey in regkeys_l:
+                self.checks_values_d[regkey] = None
 
     def __parse_registry_line(self, line):
         """
