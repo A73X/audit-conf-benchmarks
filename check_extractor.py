@@ -112,6 +112,8 @@ class CheckExtractor:
                         # Handle normal case (same value for all keys)
                         for regkey in regkeys_l:
                             self.checks_values_d[regkey] = reg_info
+            else:
+                self.checks_values_d[regkey] = None
 
     def __parse_registry_line(self, line):
         """
