@@ -240,6 +240,14 @@ class CheckExtractor:
         if condition_type in ['value_of', 'colon_value']:
             raw_value = raw_value.strip('.,')  # Remove trailing punctuation
             
+            # Check for "X or that the key does not exist" pattern
+            key_not_exist_match = re.search(r'^(\d+|\w+|"[^"]*")\s+or\s+that\s+the\s+key\s+does\s+not\s+exist', raw_value, re.IGNORECASE)
+            if key_not_exist_match:
+                value = key_not_exist_match.group(1).strip('"\'')
+                if value.isdigit():
+                    value = int(value)
+                return {'operator': '==', 'value': value}
+            
             # Check for "X for each rule" pattern
             for_each_match = re.search(r'^(\d+|\w+|"[^"]*")\s+for\s+each\s+rule', raw_value, re.IGNORECASE)
             if for_each_match:
@@ -319,6 +327,7 @@ class CheckExtractor:
                 items = [re.sub(r'\s+', '', p.strip().strip('"\''))
                         for p in normalized.split(',')]
                 items = [i for i in items if i]  # remove empties
+                items = [int(i) if i.isdigit() else i for i in items]  # convert to int if digit
                 return {'operator': '==', 'value': items}
             
             # Check for "X or Y" (multiple options)
@@ -330,6 +339,7 @@ class CheckExtractor:
                     # Further split on ',' and clean
                     subparts = [p.strip().strip('"\'') for p in part.split(',')]
                     options.extend([sp for sp in subparts if sp])  # filter empty
+                    options = [int(i) if i.isdigit() else i for i in options]  # convert to int if digit
                 return {'operator': 'in', 'value': options}
             
             # Check for simple numeric value
