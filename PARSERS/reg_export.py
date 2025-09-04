@@ -100,10 +100,10 @@ class RegExport:
             
             line_end = self.__find_end_of_line(mm, line_start)
             # Extract line bytes
-            line_bytes = mm[line_start:line_end].lower()
+            line_bytes = mm[line_start:line_end]
             line_content = line_bytes.decode(self.encoding, errors='ignore')
             if line_content:
-                if key in line_content:
+                if key in line_content.lower():
                     # Check if multiline value
                     if line_content.endswith(('\\')):
                         raw_value = line_content.split('=')[-1][:-1] # Remove trailing \

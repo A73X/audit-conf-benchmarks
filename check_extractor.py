@@ -357,6 +357,7 @@ class CheckExtractor:
                 return {'operator': '==', 'value': quoted_match.group(1)}
             
             # Return as-is for complex expressions
+            raw_value = raw_value.replace('\\', '\\\\')
             return {'operator': '==', 'value': raw_value}
         
         return raw_value
