@@ -149,7 +149,10 @@ class RegExport:
         
         # Convert value
         if reg_type == "string":
-            return raw_value[1:-1] # Remove quotes
+            value = raw_value[1:-1] # Remove quotes
+            if value.isdigit():
+                value = int(value)
+            return value
         elif reg_type == "dword": # 32-bit unsigned int
             return int(value, 16)
         elif reg_type == "qword": # 64-bit unsigned int
@@ -166,9 +169,15 @@ class RegExport:
             if type_num == 0:  # REG_NONE
                 return "None"
             elif type_num == 1:  # REG_SZ (string in hex format)
-                return bytes(hex_bytes).decode('utf-16le').rstrip('\x00')
+                value = bytes(hex_bytes).decode('utf-16le').rstrip('\x00')
+                if value.isdigit():
+                    value = int(value)
+                return value
             elif type_num == 2:  # REG_EXPAND_SZ (expandable string)
-                return bytes(hex_bytes).decode('utf-16le').rstrip('\x00')
+                value = bytes(hex_bytes).decode('utf-16le').rstrip('\x00')
+                if value.isdigit():
+                        value = int(value)
+                return value
             elif type_num == 3:  # REG_BINARY
                 return bytes(hex_bytes)
             elif type_num == 4:  # REG_DWORD (little-endian)
