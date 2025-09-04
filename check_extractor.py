@@ -235,7 +235,10 @@ class CheckExtractor:
             # Handle "between X and Y"
             range_match = re.search(r'(\d+)\s+and\s+(\d+)', raw_value)
             if range_match:
-                return {'operator': 'in', 'value': range(int(range_match.group(1)), int(range_match.group(2)) + 1)}
+                options = []
+                for i in range(int(range_match.group(1)), int(range_match.group(2)) + 1):
+                    options.append(i)
+                return {'operator': 'in', 'value': options}
         
         if condition_type in ['value_of', 'colon_value']:
             raw_value = raw_value.strip('.,')  # Remove trailing punctuation
@@ -319,15 +322,16 @@ class CheckExtractor:
                 if num_match:
                     return {'operator': '>', 'value': int(num_match.group(1))}
             
-            # Comma-separated list (with optional "and" at the end)
+            # REG_MULTI_SZ or comma-separated list of full strings
             if ',' in raw_value and ' or ' not in raw_value and not re.search(r'\([^)]+\)', raw_value) and 'but not' not in raw_value:
-                # normalize "and" → comma
-                normalized = re.sub(r',\s+and\s+', ', ', raw_value, flags=re.IGNORECASE)
-                # split and strip everything
-                items = [re.sub(r'\s+', '', p.strip().strip('"\''))
-                        for p in normalized.split(',')]
-                items = [i for i in items if i]  # remove empties
-                items = [int(i) if isinstance(i, str) and i.isdigit() else i for i in items]  # convert to int if digit
+                # Normalize " and " to "," for consistency (so it's treated as separator)
+                normalized = re.sub(r'\s+and\s+', ',', raw_value, flags=re.IGNORECASE)
+                # Split on commas
+                items = [p.strip().strip('"\'').rstrip('.') for p in normalized.split(',')]
+                # Remove empties
+                items = [i for i in items if i]
+                # Convert to int if digit
+                items = [int(i) if isinstance(i, str) and i.isdigit() else i for i in items]
                 return {'operator': '==', 'value': items}
             
             # Check for "X or Y" (multiple options)
