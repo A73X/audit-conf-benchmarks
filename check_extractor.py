@@ -89,11 +89,31 @@ class CheckExtractor:
                 
                 # Extract registry type and value expression
                 reg_info = self.__parse_registry_line(line)
-                if reg_info and reg_info['parsed_value']:
+                if reg_info and reg_info.get('parsed_value'):
                     parsed_value = reg_info["parsed_value"]
                     
-                    # Handle key mappings
-                    if isinstance(parsed_value, dict) and parsed_value.get('operator') == 'key_mapping':
+                    # Handle multi-type mappings
+                    if isinstance(parsed_value, dict) and parsed_value.get('operator') == 'multi_type_mapping':
+                        mappings = parsed_value['mappings']
+                        
+                        for regkey in regkeys_l:
+                            key_name = regkey.split(':')[-1] if ':' in regkey else regkey
+                            
+                            if key_name in mappings:
+                                mapping_info = mappings[key_name]
+                                specific_reg_info = {
+                                    'type': mapping_info['type'],
+                                    'raw_value': str(mapping_info['value']),
+                                    'condition_type': 'specific_value',
+                                    'parsed_value': {'operator': '==', 'value': mapping_info['value']}
+                                }
+                                self.checks_values_d[regkey] = specific_reg_info
+                                value_extracted = True
+                            else:
+                                value_extracted = False
+                    
+                    # Handle single-type key mappings
+                    elif isinstance(parsed_value, dict) and parsed_value.get('operator') == 'key_mapping':
                         mappings = parsed_value['mappings']
                         
                         for regkey in regkeys_l:
@@ -117,24 +137,28 @@ class CheckExtractor:
                         for regkey in regkeys_l:
                             self.checks_values_d[regkey] = reg_info
                             value_extracted = True
+        
         if not value_extracted:
             for regkey in regkeys_l:
                 self.checks_values_d[regkey] = None
 
     def __parse_registry_line(self, line):
         """
-        Parse a line containing REG_TYPE and extract structured info
+        Parse a line containing REG_TYPE(s) and extract structured info
         Returns dict with: type, raw_value, parsed_value, condition_type
         """
-        # Find the first REG_TYPE in the line
-        reg_type_match = re.search(r'(REG_\w+)', line)
-        if not reg_type_match:
+        # Find ALL REG_TYPE matches in the line
+        reg_type_matches = list(re.finditer(r'(REG_\w+)', line))
+        if not reg_type_matches:
             return None
         
-        reg_type = reg_type_match.group(1)
+        # If multiple REG_TYPEs, handle as multi-type line
+        if len(reg_type_matches) > 1:
+            return self.__parse_multi_type_line(line, reg_type_matches)
         
-        # Extract everything after the REG_TYPE
-        remainder = line[reg_type_match.end():].strip()
+        # Single REG_TYPE (existing logic)
+        reg_type = reg_type_matches[0].group(1)
+        remainder = line[reg_type_matches[0].end():].strip()
         
         # Different patterns to match
         patterns = [
@@ -168,6 +192,38 @@ class CheckExtractor:
             'parsed_value': remainder
         }
 
+    def __parse_multi_type_line(self, line, reg_type_matches):
+        """
+        Handle lines with multiple REG_TYPE declarations
+        """
+        # Pattern: REG_DWORD value of X (KeyName) and REG_SZ value of Y (KeyName2)
+        multi_pattern = r'(REG_\w+)\s+value\s+of\s+([^(]+)\s*\(([^)]+)\)'
+        matches = re.findall(multi_pattern, line)
+        
+        if matches:
+            key_value_map = {}
+            for reg_type, value, key_name in matches:
+                clean_value = value.strip().strip('"\'')
+                # Convert to int if numeric
+                if clean_value.isdigit():
+                    clean_value = int(clean_value)
+                key_value_map[key_name.strip()] = {
+                    'type': reg_type,
+                    'value': clean_value
+                }
+            
+            return {
+                'type': 'multi_type',
+                'raw_value': line,
+                'condition_type': 'multi_type',
+                'parsed_value': {
+                    'operator': 'multi_type_mapping',
+                    'mappings': key_value_map
+                }
+            }
+        
+        return None
+
     def __parse_value_expression(self, raw_value, condition_type):
         """
         Parse the actual value expression into structured data
@@ -179,8 +235,7 @@ class CheckExtractor:
             # Handle "between X and Y"
             range_match = re.search(r'(\d+)\s+and\s+(\d+)', raw_value)
             if range_match:
-                options = range(int(range_match.group(1)), int(range_match.group(2)) + 1)
-                return {'operator': 'in', 'values': options}
+                return {'operator': 'in', 'value': range(int(range_match.group(1)), int(range_match.group(2)) + 1)}
         
         if condition_type in ['value_of', 'colon_value']:
             raw_value = raw_value.strip('.,')  # Remove trailing punctuation
@@ -230,13 +285,13 @@ class CheckExtractor:
                     key_value_map[key_name.strip()] = int(value) if value.isdigit() else value
                 return {'operator': 'key_mapping', 'mappings': key_value_map}
             
-            # Check for comparatives
-            if 'or less' in raw_value:
+            # Check for comparatives (keep existing logic but add "but not" exclusions)
+            if 'or less' in raw_value and 'but not' not in raw_value:
                 num_match = re.search(r'(\d+)\s+or\s+less', raw_value)
                 if num_match:
                     return {'operator': '<=', 'value': int(num_match.group(1))}
             
-            if 'or more' in raw_value:
+            if 'or more' in raw_value and 'but not' not in raw_value:
                 num_match = re.search(r'(\d+)\s+or\s+more', raw_value)
                 if num_match:
                     return {'operator': '>=', 'value': int(num_match.group(1))}
@@ -257,7 +312,7 @@ class CheckExtractor:
                     return {'operator': '>', 'value': int(num_match.group(1))}
             
             # Comma-separated list (with optional "and" at the end)
-            if ',' in raw_value and ' or ' not in raw_value and not re.search(r'\([^)]+\)', raw_value):
+            if ',' in raw_value and ' or ' not in raw_value and not re.search(r'\([^)]+\)', raw_value) and 'but not' not in raw_value:
                 # normalize "and" → comma
                 normalized = re.sub(r',\s+and\s+', ', ', raw_value, flags=re.IGNORECASE)
                 # split and strip everything
@@ -267,7 +322,7 @@ class CheckExtractor:
                 return {'operator': '==', 'value': items}
             
             # Check for "X or Y" (multiple options)
-            if ' or ' in raw_value and all(x not in raw_value for x in ['or less', 'or more', 'or greater', 'or fewer']):
+            if ' or ' in raw_value and all(x not in raw_value for x in ['or less', 'or more', 'or greater', 'or fewer', 'but not']):
                 # Split on 'or'
                 parts = raw_value.split(' or ')
                 options = []
@@ -275,7 +330,7 @@ class CheckExtractor:
                     # Further split on ',' and clean
                     subparts = [p.strip().strip('"\'') for p in part.split(',')]
                     options.extend([sp for sp in subparts if sp])  # filter empty
-                return {'operator': 'in', 'values': options}
+                return {'operator': 'in', 'value': options}
             
             # Check for simple numeric value
             if raw_value.isdigit():
