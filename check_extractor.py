@@ -260,6 +260,14 @@ class CheckExtractor:
                 else:
                     return {'operator': '==', 'value': value}
             
+            # Check for "anything other than X"
+            anything_other_match = re.search(r'anything\s+other\s+than\s+(\d+|\w+|"[^"]*")', raw_value, re.IGNORECASE)
+            if anything_other_match:
+                value = anything_other_match.group(1).strip('"\'')
+                if value.isdigit():
+                    value = int(value)
+                return {'operator': '!=', 'value': value}
+            
             # Check for "X or less, but not Y" pattern
             but_not_match = re.search(r'(\d+)\s+or\s+less,\s+but\s+not\s+(\d+)', raw_value, re.IGNORECASE)
             if but_not_match:
