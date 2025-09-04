@@ -327,7 +327,7 @@ class CheckExtractor:
                 items = [re.sub(r'\s+', '', p.strip().strip('"\''))
                         for p in normalized.split(',')]
                 items = [i for i in items if i]  # remove empties
-                items = [int(i) if i.isdigit() else i for i in items]  # convert to int if digit
+                items = [int(i) if isinstance(i, str) and i.isdigit() else i for i in items]  # convert to int if digit
                 return {'operator': '==', 'value': items}
             
             # Check for "X or Y" (multiple options)
@@ -339,7 +339,8 @@ class CheckExtractor:
                     # Further split on ',' and clean
                     subparts = [p.strip().strip('"\'') for p in part.split(',')]
                     options.extend([sp for sp in subparts if sp])  # filter empty
-                    options = [int(i) if i.isdigit() else i for i in options]  # convert to int if digit
+                # Convert to int if digit
+                options = [int(i) if isinstance(i, str) and i.isdigit() else i for i in options]
                 return {'operator': 'in', 'value': options}
             
             # Check for simple numeric value
