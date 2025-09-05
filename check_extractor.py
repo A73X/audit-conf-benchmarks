@@ -269,7 +269,7 @@ class CheckExtractor:
                 return {'operator': '!=', 'value': value}
             
             # Check for "X or less, but not Y" pattern
-            but_not_match = re.search(r'(\d+)\s+or\s+less,\s+but\s+not\s+(\d+)', raw_value, re.IGNORECASE)
+            but_not_match = re.search(r'(\d+)\s+or\s+less(?:,\s*|\s+)?but\s+not\s*(\d+)', raw_value, re.IGNORECASE)
             if but_not_match:
                 max_val = int(but_not_match.group(1))
                 excluded_val = int(but_not_match.group(2))
@@ -282,7 +282,7 @@ class CheckExtractor:
                 }
             
             # Check for "X or more, but not Y" pattern (in case it exists)
-            but_not_more_match = re.search(r'(\d+)\s+or\s+more,\s+but\s+not\s+(\d+)', raw_value, re.IGNORECASE)
+            but_not_more_match = re.search(r'(\d+)\s+or\s+more(?:,\s*|\s+)?but\s+not\s*(\d+)', raw_value, re.IGNORECASE)
             if but_not_more_match:
                 min_val = int(but_not_more_match.group(1))
                 excluded_val = int(but_not_more_match.group(2))
