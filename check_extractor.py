@@ -372,16 +372,80 @@ class CheckExtractor:
 
     def __get_values_in_remediation_cell(self, cell_value, ui_paths_l):
         cell_value_lines = cell_value.split('\n')
-        line_values = ""
-        
-        # Get value line
+
+        value_extracted = False
         for line in cell_value_lines:
             if 'UI path to' in line:
-                line_values = line.split('UI path to', 1)[-1].split(':', 1)[0]
+                # Extract the value part after "UI path to" and before the colon
+                value_part = line.split('UI path to', 1)[-1].split(':', 1)[0].strip()
+                
+                # Parse the value using custom UI logic
+                parsed_info = self.__parse_ui_value_expression(value_part)
+                
+                # Store the parsed value for the UI path
+                for ui_path in ui_paths_l:
+                    self.checks_values_d[ui_path] = {
+                        'type': 'UI_PATH',
+                        'raw_value': value_part,
+                        'condition_type': 'ui_value',
+                        'parsed_value': parsed_info
+                    }
+                    value_extracted = True
                 break
-        value = line_values.strip()
-        # Add UI path and value to dict
-        self.checks_values_d[ui_paths_l[0]] = value
+        
+        if not value_extracted:
+            for ui_path in ui_paths_l:
+                self.checks_values_d[ui_path] = None
+
+    def __parse_ui_value_expression(self, raw_value):
+        """
+        Parse UI path value expressions based on the specific patterns from your examples
+        """
+        raw_value = raw_value.strip('.,')  # Remove trailing punctuation
+        
+        # Check for "X or more Y"
+        more_match = re.search(r'(\d+)\s+or\s+more', raw_value, re.IGNORECASE)
+        if more_match:
+            return {'operator': '>=', 'value': int(more_match.group(1))}
+        
+        # Check for "X or less Y"
+        less_match = re.search(r'(\d+)\s+or\s+less', raw_value, re.IGNORECASE)
+        if less_match:
+            return {'operator': '<=', 'value': int(less_match.group(1))}
+        
+        # Check for "X or fewer Y, but not Z"
+        fewer_but_not_match = re.search(r'(\d+)\s+or\s+fewer\s+\w+.*?,\s*but\s+not\s+(\d+)', raw_value, re.IGNORECASE)
+        if fewer_but_not_match:
+            max_val = int(fewer_but_not_match.group(1))
+            excluded_val = int(fewer_but_not_match.group(2))
+            return {
+                'operator': 'compound',
+                'conditions': [
+                    {'operator': '<=', 'value': max_val},
+                    {'operator': '!=', 'value': excluded_val}
+                ]
+            }
+        
+        # Check for "X or greater Y, but not Z"
+        greater_but_not_match = re.search(r'(\d+)\s+or\s+greater\s+\w+.*?,\s*but\s+not\s+(\d+)', raw_value, re.IGNORECASE)
+        if greater_but_not_match:
+            min_val = int(greater_but_not_match.group(1))
+            excluded_val = int(greater_but_not_match.group(2))
+            return {
+                'operator': 'compound',
+                'conditions': [
+                    {'operator': '>=', 'value': min_val},
+                    {'operator': '!=', 'value': excluded_val}
+                ]
+            }
+        
+        # Check for "include X, Y"
+        if "include" in raw_value:
+            value = raw_value.replace('include ', '')
+            return {'operator': '==', 'value': value}
+        
+        # Return as-is
+        return {'operator': '==', 'value': raw_value}
 
     def __check_duplicate_key(self, regkey):
         # Regkey
