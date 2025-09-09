@@ -1,16 +1,18 @@
 import os, mmap, re, chardet
 
 class Searcher:
-    def __init__(self, workdir, not_unique_key_l):
+    def __init__(self, workdir):
         self.workdir = workdir
         self.workdir_files_l = []
-        self.__not_unique_key_l = not_unique_key_l
+        self.__not_unique_key_l = []
         self.file_size_exclusion = 1000000000 # 1 GB
-        self.list_all_files()
 
-    def list_all_files(self):
+    def set_not_unique_key_l(self, not_unique_key_l):
+        self.__not_unique_key_l = not_unique_key_l
+
+    def list_all_files(self, workdir):
         file_paths_l = []
-        for root, dirs, files in os.walk(self.workdir):
+        for root, dirs, files in os.walk(workdir):
             for file in files:
                 file_paths_l.append(os.path.join(root, file))
         self.workdir_files_l = file_paths_l
@@ -97,4 +99,6 @@ class Searcher:
                 keyword = regkey.split(":")[-1].strip()
             else:
                 keyword = regkey.split("\\")[-1].strip()
+                if keyword.startswith(("Audit ")):
+                    keyword = keyword.split("Audit ",1)[-1]
         return keyword
