@@ -100,5 +100,5 @@ class Searcher:
             else:
                 keyword = regkey.split("\\")[-1].strip()
                 if keyword.startswith(("Audit ")):
-                    keyword = keyword.split("Audit ",1)[-1]
+                    keyword = keyword.split("Audit ", 1)[-1]
         return keyword

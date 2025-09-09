@@ -50,4 +50,5 @@ class ParserManager:
                 if parsable_file in file:
                     found_values_d, found_proofs_d  = parser.parse(file, regkeys_l)
                     return found_values_d, found_proofs_d
-                
+        # No parser matched
+        return {}, {}
