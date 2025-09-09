@@ -6,6 +6,46 @@ class Searcher:
         self.workdir_files_l = []
         self.__not_unique_key_l = []
         self.file_size_exclusion = 1000000000 # 1 GB
+        self.keyword_to_key_mapping = {
+            "Enforce password history": "PasswordHistorySize",
+            "Maximum password age": "MaximumPasswordAge",
+            "Minimum password age": "MinimumPasswordAge",
+            "Minimum password length": "MinimumPasswordLength",
+            "Password must meet complexity requirements": "PasswordComplexity",
+            "Store passwords using reversible encryption": "ClearTextPassword",
+            "Account lockout duration": "LockoutDuration",
+            "Account lockout threshold": "LockoutBadCount",
+            "Reset account lockout counter after": "ResetLockoutCounter",
+            "Guest account status": "EnableGuestAccount",
+            "Rename administrator account": "NewAdministratorName",
+            "Rename guest account": "NewGuestName",
+            "Allow anonymous SID/Name translation": "LSAAnonymousNameLookup",
+            "Force logoff when logon hours expire": "ForceLogoffWhenHourExpire",
+            "Allow log on locally": "SeInteractiveLogonRight",
+            "Deny log on locally": "SeDenyInteractiveLogonRight",
+            "Allow log on through Remote Desktop Services": "SeRemoteInteractiveLogonRight",
+            "Deny log on through Remote Desktop Services": "SeDenyRemoteInteractiveLogonRight",
+            "Log on as a batch job": "SeBatchLogonRight",
+            "Deny log on as a batch job": "SeDenyBatchLogonRight",
+            "Log on as a service": "SeServiceLogonRight",
+            "Deny log on as a service": "SeDenyServiceLogonRight",
+            "Take ownership of files or other objects": "SeTakeOwnershipPrivilege",
+            "Shut down the system": "SeShutdownPrivilege",
+            "Force shutdown from a remote system": "SeRemoteShutdownPrivilege",
+            "Debug programs": "SeDebugPrivilege",
+            "Manage auditing and security log": "SeSecurityPrivilege",
+            "Change the system time": "SeSystemtimePrivilege",
+            "Change the time zone": "SeTimeZonePrivilege",
+            "Back up files and directories": "SeBackupPrivilege",
+            "Restore files and directories": "SeRestorePrivilege",
+            "Impersonate a client after authentication": "SeImpersonatePrivilege",
+            "Replace a process level token": "SeAssignPrimaryTokenPrivilege",
+            "Increase scheduling priority": "SeIncreaseBasePriorityPrivilege",
+            "Load and unload device drivers": "SeLoadDriverPrivilege",
+            "Lock pages in memory": "SeLockMemoryPrivilege",
+            "Create symbolic links": "SeCreateSymbolicLinkPrivilege",
+            "Take ownership of files or objects": "SeTakeOwnershipPrivilege"
+        }
 
     def set_not_unique_key_l(self, not_unique_key_l):
         self.__not_unique_key_l = not_unique_key_l
@@ -101,4 +141,11 @@ class Searcher:
                 keyword = regkey.split("\\")[-1].strip()
                 if keyword.startswith(("Audit ")):
                     keyword = keyword.split("Audit ", 1)[-1]
+                keyword = self.__convert_keyword_secpol_compliant(keyword)
         return keyword
+    
+    def __convert_keyword_secpol_compliant(self, keyword):
+        if keyword in self.keyword_to_key_mapping.keys():
+            return self.keyword_to_key_mapping[keyword]
+        else:
+            return keyword
