@@ -104,7 +104,7 @@ class CisBenchmarkConverter:
         self.log_info(f"Writing output to {output_file} in {output_format.upper()} format...")
 
         if output_format == 'csv':
-            headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs']
+            headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs', "Reason"]
             with open(output_file, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file, delimiter='|')
                 writer.writerow([title if title else "CIS Benchmark Document"])
@@ -113,7 +113,7 @@ class CisBenchmarkConverter:
                 writer.writerow(headers)  # Column headers
 
                 for recommendation in recommendations:
-                    recommendation['Compliance Status'] = 'To Review'
+                    recommendation['Compliance Status'] = 'check manually'
                     row = [recommendation.get(header, '') for header in headers]
                     writer.writerow(row)
 
@@ -126,30 +126,30 @@ class CisBenchmarkConverter:
             sheet["A2"] = version if version else ""
             sheet["A2"].font = Font(size=12, italic=True)
 
-            headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs']
+            headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs', "Reason"]
             sheet.append([""] * len(headers))  # Empty row for spacing
             sheet.append(headers)
 
             for row_idx, recommendation in enumerate(recommendations, start=5):
-                recommendation['Compliance Status'] = 'To Review'
+                recommendation['Compliance Status'] = 'check manually'
                 row = [recommendation.get(header, '') for header in headers]
                 sheet.append(row)
 
-            dv = DataValidation(type="list", formula1='"Compliant,Non-Compliant,To Review"', showDropDown=False)
+            dv = DataValidation(type="list", formula1='"compliant,non-compliant,check manually"', showDropDown=False)
             sheet.add_data_validation(dv)
             for row_idx in range(5, len(recommendations) + 5):
                 dv.add(sheet[f"A{row_idx}"])
 
             compliant_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
             non_compliant_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-            to_review_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
-            compliant_rule = FormulaRule(formula=['$A5="Compliant"'], fill=compliant_fill)
-            non_compliant_rule = FormulaRule(formula=['$A5="Non-Compliant"'], fill=non_compliant_fill)
-            to_review_rule = FormulaRule(formula=['$A5="To Review"'], fill=to_review_fill)
+            check_manually_fill = PatternFill(start_color="FDDA0D", end_color="FDDA0D", fill_type="solid")
+            compliant_rule = FormulaRule(formula=['$A5="compliant"'], fill=compliant_fill)
+            non_compliant_rule = FormulaRule(formula=['$A5="non-compliant"'], fill=non_compliant_fill)
+            check_manually_rule = FormulaRule(formula=['$A5="check manually"'], fill=check_manually_fill)
             
             sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", compliant_rule)
             sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", non_compliant_rule)
-            sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", to_review_rule)
+            sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", check_manually_rule)
 
             # Add table style
             tab = Table(displayName="CISRecommendations", ref=f"A4:{chr(65+len(headers)-1)}{len(recommendations) + 4}")
@@ -162,7 +162,7 @@ class CisBenchmarkConverter:
             sheet.column_dimensions['B'].width = 8  # Number (default width)
             sheet.column_dimensions['C'].width = 8  # Level (default width)
             sheet.column_dimensions['D'].width = 50  # Title
-            for col in range(5, 13):  # Columns E to L (Profile Applicability to References)
+            for col in range(5, 16):  # Columns E to P (Profile Applicability to References)
                 sheet.column_dimensions[chr(64 + col)].width = 10
 
             workbook.save(output_file)

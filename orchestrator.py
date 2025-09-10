@@ -3,6 +3,7 @@ from check_extractor import CheckExtractor
 from parser_manager import ParserManager
 from searcher import Searcher
 from comparator import Comparator
+from xlsx_writer import XlsxWriter
 import os
 
 class Orchestrator:
@@ -16,6 +17,7 @@ class Orchestrator:
         self.searcher = Searcher(self.workdir)
         self.parserManager = ParserManager()
         self.comparator = Comparator()
+        self.xlsxWriter = XlsxWriter()
         
     def __check_benchmark(self, benchmark_path):
         try:
@@ -78,4 +80,7 @@ class Orchestrator:
         self.comparator.set_checks_l(self.checkExtractor.checks_l)
         self.comparator.set_checks_values_d(self.checkExtractor.checks_values_d)
         self.comparator.set_values_d(self.__values_d)
-        self.comparator.compare_and_print()
+        compliance_l, reason_l = self.comparator.eval_compliance()
+
+        self.xlsxWriter.set_benchmark_xlsx_path(self.benchmark_path)
+        self.xlsxWriter.write(self.checkExtractor.checks_l, self.__values_d, self.__proofs_d, compliance_l, reason_l)
