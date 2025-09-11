@@ -16,11 +16,12 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl import Workbook
+from helper import Helper
 import os
-from colorama import Fore, Style, init
 
 class CisBenchmarkConverter:
     def __init__(self):
+        self.helper = Helper()
         # Regular expressions for extracting recommendations and cleaning text
         self.recommendation_pattern = re.compile(r'^\s*(\d+(?:\.\d+)+)\s+(.+)')  # Matches numbers like 1.1.1, 2.2.2.2, etc.
         self.remove_pattern = re.compile(r'Page\s\d{1,3}|•')
@@ -101,7 +102,7 @@ class CisBenchmarkConverter:
         return file_name
 
     def write_output(self, recommendations, output_file, output_format, title, version):
-        self.log_info(f"Writing output to {output_file} in {output_format.upper()} format...")
+        self.helper.log_info(f"Writing output to {output_file} in {output_format.upper()} format...")
 
         if output_format == 'csv':
             headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs', "Reason"]
@@ -168,20 +169,10 @@ class CisBenchmarkConverter:
             workbook.save(output_file)
             workbook.close()
 
-        self.log_info(f"Finished writing {len(recommendations)} recommendations to {output_file}.")
-
-    # Logging functions
-    def log_info(self, message):
-        print(f"\n{Fore.GREEN}[INFO]{Style.RESET_ALL} {message}")
-
-    def log_warning(self, message):
-        print(f"\n{Fore.YELLOW}[WARNING]{Style.RESET_ALL} {message}")
-
-    def log_debug(self, message):
-        print(f"\n{Fore.BLUE}[DEBUG]{Style.RESET_ALL} {message}")
+        self.helper.log_info(f"Finished writing {len(recommendations)} recommendations to {output_file}.")
 
     def read_pdf(self, input_file):
-        self.log_info("Starting to read the PDF file...")
+        self.helper.log_info("Starting to read the PDF file...")
         text = []
         with pdfplumber.open(input_file) as pdf:
             total_pages = len(pdf.pages)
@@ -192,20 +183,20 @@ class CisBenchmarkConverter:
                 page_text = page.extract_text()
                 
                 # Display progress
-                print(f"\r{Fore.GREEN}[INFO]{Style.RESET_ALL} Processing page {page_number}/{total_pages}...", end="", flush=True)
+                self.helper.log_info(f"Processing page {page_number}/{total_pages}...", end="\r", flush=True)
                 
                 if not extraction_started:
                     if "Recommendations" in page_text and "....." not in page_text and "Recommendation Definitions" not in page_text:
                         extraction_started = True
-                        self.log_debug(f"Recommendations section detected. Starting extraction... (This may take a while)")
+                        self.helper.log_debug(f"Recommendations section detected. Starting extraction... (This may take a while)")
                 
                 if extraction_started:
                     if "Appendix: Summary Table" in page_text or "Checklist" in page_text:
-                        self.log_debug("End of Recommendations section reached.")
+                        self.helper.log_debug("End of Recommendations section reached.")
                         break
                     text.append(page_text)
 
-        self.log_info("\nCompleted reading the PDF file.")
+        self.helper.log_info("Completed reading the PDF file.")
         return '\n'.join(text)
 
     def find_profile_applicability(self, lines, start_index, max_depth=10):
