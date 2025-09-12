@@ -1,7 +1,9 @@
+from helper import Helper
 import openpyxl, re
 
 class CheckExtractor:
     def __init__(self):
+        self.helper = Helper()
         self.checks_l = []
         self.checks_values_d = {}
         self.not_unique_key_l = []
@@ -14,6 +16,7 @@ class CheckExtractor:
         audit_column=9 # column (I)
         remediation_column=10 # column (J)
         
+        self.helper.log_info("Starting checks extraction from XLSX")
         # Load the workbook
         workbook = openpyxl.load_workbook(benchmark_xlsx, read_only=True)
 
@@ -24,6 +27,7 @@ class CheckExtractor:
         cell_value = "Random to get in loop" # Should not be empty
         # Loops until it finds an empty cell
         while cell_value :
+            self.helper.log_loading("Extracting checks")
             # Get the cell value at audit column
             cell_value = sheet.cell(row=row, column=audit_column).value
             # Check if string (empty cell are NoneType)
@@ -40,6 +44,7 @@ class CheckExtractor:
                     self.__get_values_in_audit_cell(cell_value, regkeys_l)
             row+=1
         workbook.close()
+        self.helper.log_info(f"Successfully extracted {len(self.checks_l)} checks from XLSX")
 
     def __get_regkeys_in_audit_cell(self, cell_value):
         regkeys_l = []

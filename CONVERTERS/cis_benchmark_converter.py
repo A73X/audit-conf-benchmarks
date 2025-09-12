@@ -102,7 +102,7 @@ class CisBenchmarkConverter:
         return file_name
 
     def write_output(self, recommendations, output_file, output_format, title, version):
-        self.helper.log_info(f"Writing output to {output_file} in {output_format.upper()} format...")
+        self.helper.log_info(f"Writing output to {output_file} in {output_format.upper()} format")
 
         if output_format == 'csv':
             headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs', "Reason"]
@@ -172,7 +172,7 @@ class CisBenchmarkConverter:
         self.helper.log_info(f"Finished writing {len(recommendations)} recommendations to {output_file}.")
 
     def read_pdf(self, input_file):
-        self.helper.log_info("Starting to read the PDF file...")
+        self.helper.log_info("Starting to read the PDF file")
         text = []
         with pdfplumber.open(input_file) as pdf:
             total_pages = len(pdf.pages)
@@ -183,7 +183,7 @@ class CisBenchmarkConverter:
                 page_text = page.extract_text()
                 
                 # Display progress
-                self.helper.log_info(f"Processing page {page_number}/{total_pages}...", end="\r", flush=True)
+                self.helper.log_info(f"Processing page {page_number}/{total_pages}", end="\r", flush=True)
                 
                 if not extraction_started:
                     if "Recommendations" in page_text and "....." not in page_text and "Recommendation Definitions" not in page_text:

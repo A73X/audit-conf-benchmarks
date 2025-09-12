@@ -4,10 +4,12 @@ from parser_manager import ParserManager
 from searcher import Searcher
 from comparator import Comparator
 from xlsx_writer import XlsxWriter
+from helper import Helper
 import os
 
 class Orchestrator:
     def __init__(self, benchmark_path, workdir):
+        self.helper = Helper()
         self.__regkeys_per_file_d = {}
         self.__values_d = {}
         self.__proofs_d = {}
@@ -62,8 +64,14 @@ class Orchestrator:
         self.searcher.set_not_unique_key_l(self.checkExtractor.not_unique_key_l)
         self.searcher.list_all_files(self.workdir)
 
+        self.helper.log_info("Starting search phase for parsable files")
+        log_counter = 1
+        log_max = len([reg for check in self.checkExtractor.checks_l for reg in check])
+        log_files_count = len(self.searcher.workdir_files_l)
         for check in self.checkExtractor.checks_l:
             for regkey in check:
+                self.helper.log_info(f"Searching for parsable files. Searched {log_counter}/{log_max} times through {log_files_count} files", end="\r", flush=True)
+                log_counter += 1
                 try:
                     keyword = self.searcher.regkey_to_keyword(regkey)
                     found_files_l = self.searcher.search_keyword_insensitive(keyword)
@@ -71,11 +79,15 @@ class Orchestrator:
                     self.__update_regkeys_per_file_dict(found_files_l, regkey)
                 except Exception as e:
                     print(f"Keyword error : {keyword} Exception: {e}")
+        print()
+        self.helper.log_info("End of search phase for parsable files")
 
+        self.helper.log_info("Starting parse phase")
         for file, regkeys_l in self.__regkeys_per_file_d.items():
             found_values_d, found_proofs_d = self.parserManager.parse(file, regkeys_l)
             self.__update_values(found_values_d)
             self.__update_proofs(found_proofs_d)
+        self.helper.log_info("End of parse phase")
 
         self.comparator.set_checks_l(self.checkExtractor.checks_l)
         self.comparator.set_checks_values_d(self.checkExtractor.checks_values_d)

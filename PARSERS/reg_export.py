@@ -3,7 +3,7 @@ import mmap
 class RegExport:
     def __init__(self):
         self.name = 'RegExport'
-        self.parsable_files_l = ['HKLM.txt', 'HKU.txt', 'HKCU.txt', 'HKCC.txt', 'HKCR.txt']
+        self.parsable_files_l = ['HKLM.reg', 'HKU.reg', 'HKCU.reg', 'HKCC.reg', 'HKCR.reg']
         self.encoding = 'utf-16-le'
         self.new_line = b'\r\x00\n\x00'
 
