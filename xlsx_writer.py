@@ -1,8 +1,10 @@
+from helper import Helper
 import openpyxl
 
 class XlsxWriter:
     def __init__(self):
         self.name = "XlsxWriter"
+        self.helper = Helper()
     
     def set_benchmark_xlsx_path(self, benchmark_xlsx):
         self.benchmark_xlsx = benchmark_xlsx
@@ -30,9 +32,15 @@ class XlsxWriter:
             sheet.cell(row=row, column=reason_column).value = "\n".join(reasons[i])
             row += 1
 
-        # Save the changes
+            # Logging
+            self.helper.log_info(f"{i+1}/{len(checks)} checks written in {self.benchmark_xlsx}", end="\r", flush=True)
+
+        # Save changes
         workbook.save(self.benchmark_xlsx)
         workbook.close()
+
+        # Logging
+        print()
     
     def __format_extracted(self, regkeys, values_or_proofs):
         cell_value = ""

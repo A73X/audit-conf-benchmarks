@@ -1,9 +1,11 @@
+from helper import Helper
 import csv, mmap
 
 class AuditPolicy:
     def __init__(self):
         self.name = 'AuditPolicy'
         self.parsable_files_l = ['.csv']
+        self.helper = Helper()
 
     def __extract_keys(self, regkeys_l):
         keyword_uipath_d = {}
@@ -24,10 +26,17 @@ class AuditPolicy:
             reader = csv.reader(f)
             header = next(reader)  # Ignore header line
             for row in reader:
+                # Logging
+                len_uipath = len(keyword_uipath_d.keys())
+                len_values = len(values_d.keys())
+                self.helper.log_loading(f"Found {len_values}/{len_uipath} values in {file} with {self.name} parser")
+
                 if len(row) > 4:
                     subcategory = row[2]
                     inclusion_setting = row[4]
                     if subcategory in keyword_uipath_d.keys():
                         values_d[keyword_uipath_d[subcategory]] = inclusion_setting
                         proofs_d[keyword_uipath_d[subcategory]] = file
+        # Logging
+        print()
         return values_d, proofs_d

@@ -1,3 +1,4 @@
+from helper import Helper
 import mmap
 
 class RegExport:
@@ -6,6 +7,7 @@ class RegExport:
         self.parsable_files_l = ['HKLM.reg', 'HKU.reg', 'HKCU.reg', 'HKCC.reg', 'HKCR.reg']
         self.encoding = 'utf-16-le'
         self.new_line = b'\r\x00\n\x00'
+        self.helper = Helper()
 
     def parse(self, file, regkeys_l):
         formatted_regkeys_keys_d, formatted_regkeys_bytes_d, formatted_regkeys_og_regkeys_d = self.__prepare_dicts_for_parsing(regkeys_l)
@@ -16,6 +18,12 @@ class RegExport:
                 line_start = 0
                 
                 while line_start < len(mm):
+                    # Logging
+                    len_regkeys = len(formatted_regkeys_keys_d.keys())
+                    len_found_values = len(found_values_d.keys())
+                    self.helper.log_loading(f"Found {len_found_values}/{len_regkeys} values in {file} with {self.name} parser")
+
+                    # Find end of line
                     line_end = self.__find_end_of_line(mm, line_start)
                     
                     # Extract line bytes
@@ -51,6 +59,8 @@ class RegExport:
                         break
                     else:
                         line_start = self.__move_to_next_line(mm, line_end)
+        # Logging
+        print()
         return found_values_d, found_proofs_d
     
     def __find_end_of_line(self, mm, line_start):

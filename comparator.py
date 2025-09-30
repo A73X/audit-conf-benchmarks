@@ -1,3 +1,4 @@
+from helper import Helper
 import re
 
 class Comparator:
@@ -6,6 +7,7 @@ class Comparator:
         self.checks_values_d = {}
         self.values_d = {}
         self.compliance_l = []
+        self.helper = Helper()
 
     def set_checks_l(self, checks_l):
         self.checks_l = checks_l
@@ -53,6 +55,12 @@ class Comparator:
             # Get compliance for check
             compliance_l.append(self.__get_compliance_for_check(compliance_keys_l))
             reason_l.append(reasons_keys_l)
+
+            # Logging
+            self.helper.log_info(f"Checked compliance for {len(compliance_l)}/{len(self.checks_l)}", end="\r", flush=True)
+        
+        # Logging
+        print()
         return compliance_l, reason_l
 
 

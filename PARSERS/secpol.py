@@ -1,7 +1,10 @@
+from helper import Helper
+
 class Secpol:
     def __init__(self):
         self.name = 'Secpol'
         self.parsable_files_l = ['.inf']
+        self.helper = Helper()
         self.key_to_keyword_mapping = {
             "PasswordHistorySize": "Enforce password history",
             "MaximumPasswordAge": "Maximum password age",
@@ -166,6 +169,11 @@ class Secpol:
 
         current_section = None
         for line in lines:
+            # Logging
+            len_uipath = len(keyword_uipath_d.keys())
+            len_values = len(values_d.keys())
+            self.helper.log_loading(f"Found {len_values}/{len_uipath} values in {file} with {self.name} parser")
+
             l = line.strip()
             if not l or l.startswith(';'):
                 continue
@@ -194,4 +202,6 @@ class Secpol:
                     values_d[keyword_uipath_d[self.key_to_keyword_mapping[key]]] = self.__interprete_value(key, val)
                     proofs_d[keyword_uipath_d[self.key_to_keyword_mapping[key]]] = file
 
+        # Logging
+        print()
         return values_d, proofs_d

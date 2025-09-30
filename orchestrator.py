@@ -79,6 +79,7 @@ class Orchestrator:
                     self.__update_regkeys_per_file_dict(found_files_l, regkey)
                 except Exception as e:
                     print(f"Keyword error : {keyword} Exception: {e}")
+        # Logging
         print()
         self.helper.log_info("End of search phase for parsable files")
 
@@ -89,10 +90,14 @@ class Orchestrator:
             self.__update_proofs(found_proofs_d)
         self.helper.log_info("End of parse phase")
 
+        self.helper.log_info("Starting compliance auditing phase")
         self.comparator.set_checks_l(self.checkExtractor.checks_l)
         self.comparator.set_checks_values_d(self.checkExtractor.checks_values_d)
         self.comparator.set_values_d(self.__values_d)
         compliance_l, reason_l = self.comparator.eval_compliance()
+        self.helper.log_info("End of compliance auditing phase")
 
+        self.helper.log_info("Starting XLSX writing phase")
         self.xlsxWriter.set_benchmark_xlsx_path(self.benchmark_path)
         self.xlsxWriter.write(self.checkExtractor.checks_l, self.__values_d, self.__proofs_d, compliance_l, reason_l)
+        self.helper.log_info("End of XLSX writing phase")
