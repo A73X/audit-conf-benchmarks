@@ -1,3 +1,4 @@
+from helper import Helper
 import os, mmap, re, chardet
 
 class Searcher:
@@ -6,6 +7,7 @@ class Searcher:
         self.workdir_files_l = []
         self.__not_unique_key_l = []
         self.file_size_exclusion = 1000000000 # 1 GB
+        self.helper = Helper()
         self.keyword_to_key_mapping = {
             "Enforce password history": "PasswordHistorySize",
             "Maximum password age": "MaximumPasswordAge",
@@ -79,25 +81,7 @@ class Searcher:
             result = chardet.detect(raw_data)
             return result['encoding'] if result['confidence'] > 0.7 else 'utf-8'
     
-    def search_keyword_sensitive(self, keyword):
-        file_paths_l = []
-
-        for file in self.workdir_files_l:
-            try:
-                fsize = os.path.getsize(file)
-                if (fsize == 0) or (fsize > self.file_size_exclusion):
-                    continue
-                encoding = self.__detect_encoding(file)
-                with open(file, "r", encoding=encoding, errors='ignore') as f:
-                    with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                        if mm.find(keyword.encode(encoding)) != -1:
-                            file_paths_l.append(file)
-            except Exception as e:
-                # Print or log errors like permission issues
-                print(f"Skipping {file}: {e}")
-        return file_paths_l
-    
-    def search_keyword_insensitive(self, keyword):
+    def __search_keyword_insensitive(self, keyword):
         file_paths_l = []
         
         for file in self.workdir_files_l:
@@ -121,7 +105,7 @@ class Searcher:
         keyword_lower = keyword.lower()
         return data_lower.find(keyword_lower)
     
-    def regkey_to_keyword(self, regkey):
+    def __regkey_to_keyword(self, regkey):
         # Regkey
         if regkey.startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):
             keyword = regkey.split(":", 1)[-1].strip()
@@ -149,3 +133,32 @@ class Searcher:
             return self.keyword_to_key_mapping[keyword]
         else:
             return keyword
+    
+    def __update_regkeys_per_file_dict(self, regkeys_per_file_d, found_files_l, regkey):
+        for file in found_files_l:
+            if file in regkeys_per_file_d:
+                regkeys_per_file_d[file].append(regkey)
+            else:
+                regkeys_per_file_d[file] = [regkey]
+    
+    def search_insensitive(self, checks_l):
+        # Logging
+        log_counter = 1
+        log_max = len([reg for check in checks_l for reg in check])
+        log_files_count = len(self.workdir_files_l)
+        
+        regkeys_per_file_d = {}
+        for check in checks_l:
+            for regkey in check:
+                self.helper.log_info(f"Searching for parsable files. Searched {log_counter}/{log_max} times through {log_files_count} files", end="\r", flush=True)
+                log_counter += 1
+                try:
+                    keyword = self.__regkey_to_keyword(regkey)
+                    found_files_l = self.__search_keyword_insensitive(keyword)
+                    # Update dict in orchestrator
+                    self.__update_regkeys_per_file_dict(regkeys_per_file_d, found_files_l, regkey)
+                except Exception as e:
+                    print(f"Keyword error : {keyword} Exception: {e}")
+        # Logging
+        print()
+        return regkeys_per_file_d
