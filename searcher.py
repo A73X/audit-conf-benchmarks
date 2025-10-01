@@ -1,13 +1,12 @@
 from helper import Helper
-import os, mmap, re, chardet, threading
+import os, mmap, re, chardet
 
 class Searcher:
-    def __init__(self, workdir, nb_threads):
+    def __init__(self, workdir):
         self.workdir = workdir
         self.workdir_files_l = []
         self.__not_unique_key_l = []
         self.file_size_exclusion = 1000000000 # 1 GB
-        self.nb_threads = nb_threads
         self.helper = Helper()
         self.keyword_to_key_mapping = {
             "Enforce password history": "PasswordHistorySize",
@@ -120,57 +119,13 @@ class Searcher:
     def search_insensitive(self, checks_l):
         # Flatten and convert regkeys -> keywords
         keywords_d = {regkey: self.__regkey_to_keyword(regkey) for check in checks_l for regkey in check}
-        
         regkeys_per_file_d = {}
-        lock = threading.Lock()
-
-        # Split files for work
-        chunks_files_l = self.__split_files_l(self.workdir_files_l)
-        
-        # Init threads
-        threads = []
-        for chunk in chunks_files_l:
-            t = threading.Thread(target=self.__search_insensitive_thread, args=(lock, chunk, keywords_d, regkeys_per_file_d,))
-            threads.append(t)
-
-        # Start each thread
-        for t in threads:
-            t.start()
-
-        # Wait for all threads to finish
-        for t in threads:
-            t.join()
 
         # Logging
-        print()
-        return regkeys_per_file_d
-    
-    def __split_files_l(self, files_l):
-        # Calculate base chunk size and remainder
-        total_length = len(files_l)
-        base_chunk_size, remainder = divmod(total_length, self.nb_threads)
+        nb_files = len(self.workdir_files_l)
+        file_counter = 1
 
-        chunks = []
-        for i in range(self.nb_threads):
-            # Calculate start index
-            # First 'remainder' chunks get an extra element
-            start_offset = min(i, remainder)
-            start_index = i * base_chunk_size + start_offset
-
-            # Calculate end index
-            end_offset = min(i + 1, remainder)
-            end_index = (i + 1) * base_chunk_size + end_offset
-
-            # Extract the chunk
-            chunk = files_l[start_index:end_index]
-            chunks.append(chunk)
-
-        return chunks
-    
-    def __search_insensitive_thread(self, lock, chunk, keywords_d, regkeys_per_file_d):
-        local_regkeys_d = {}
-        
-        for file in chunk:
+        for file in self.workdir_files_l:
             try:
                 fsize = os.path.getsize(file)
                 if (fsize == 0) or (fsize > self.file_size_exclusion):
@@ -180,14 +135,15 @@ class Searcher:
                     with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                         content = bytes(mm).lower()
                         for regkey, keyword in keywords_d.items():
-                            self.helper.log_loading(f"Searching for potential values in files for parsing")
+                            self.helper.log_loading(f"Searching for potential values in {file_counter}/{nb_files} files for parsing")
                             if content.find(keyword.encode(encoding).lower()) != -1:
-                                local_regkeys_d.setdefault(file, []).append(regkey)
+                                # Update dict
+                                regkeys_per_file_d.setdefault(file, []).append(regkey)
+                file_counter += 1
             except Exception as e:
                 # Print or log errors like permission issues
                 print(f"Skipping {file}: {e}")
-        
-        # Update dict when lock is acquired
-        with lock:
-            for file, regkeys in local_regkeys_d.items():
-                regkeys_per_file_d.setdefault(file, []).extend(regkeys)
+
+        # Logging
+        print()
+        return regkeys_per_file_d

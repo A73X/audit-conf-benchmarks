@@ -16,7 +16,7 @@ class Orchestrator:
         self.benchmark_path = benchmark_path
         self.workdir = workdir
         self.checkExtractor = CheckExtractor()
-        self.searcher = Searcher(self.workdir, 16)
+        self.searcher = Searcher(self.workdir)
         self.parserManager = ParserManager()
         self.comparator = Comparator()
         self.xlsxWriter = XlsxWriter()

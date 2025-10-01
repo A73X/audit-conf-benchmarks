@@ -21,7 +21,7 @@ class RegExport:
                     # Logging
                     len_regkeys = len(formatted_regkeys_keys_d.keys())
                     len_found_values = len(found_values_d.keys())
-                    self.helper.log_loading(f"Found {len_found_values}/{len_regkeys} values in {file} with {self.name} parser")
+                    self.helper.log_loading(f"Found {len_found_values}/{len_regkeys} potential values in {file} with {self.name} parser")
 
                     # Find end of line
                     line_end = self.__find_end_of_line(mm, line_start)

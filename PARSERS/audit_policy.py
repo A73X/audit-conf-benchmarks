@@ -29,7 +29,7 @@ class AuditPolicy:
                 # Logging
                 len_uipath = len(keyword_uipath_d.keys())
                 len_values = len(values_d.keys())
-                self.helper.log_loading(f"Found {len_values}/{len_uipath} values in {file} with {self.name} parser")
+                self.helper.log_loading(f"Found {len_values}/{len_uipath} potential values in {file} with {self.name} parser")
 
                 if len(row) > 4:
                     subcategory = row[2]
