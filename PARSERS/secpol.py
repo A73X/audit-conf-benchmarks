@@ -70,6 +70,7 @@ class Secpol:
             "S-1-5-18": "Local System",
             "S-1-5-19": "Local Service",
             "S-1-5-20": "Network Service",
+            "S-1-5-113": "Local account",
         
             # Built-in domain alias (Local groups)
             "S-1-5-32-544": "Administrators",
@@ -142,11 +143,11 @@ class Secpol:
         
         if isinstance(value, str) and "*S-" in value:
             sid_value_l = value.split(",")
-            interpreted_value_l = []
-            for sid in sid_value_l:
-                interpreted_value_l.append(self.__sid_value(sid.strip()))
-            interpreted_value = ", ".join(interpreted_value_l)
-            return interpreted_value
+            interpreted_value_l = [self.__sid_value(sid.strip()) for sid in sid_value_l]
+            if len(interpreted_value_l) == 1:
+                return interpreted_value_l[0]
+            else:
+                return interpreted_value_l
         
         #  Return as-is
         return value

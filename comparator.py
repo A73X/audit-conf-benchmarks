@@ -84,6 +84,12 @@ class Comparator:
         operator = expected_value["parsed_value"]["operator"]
         if operator == "==":
             value = expected_value["parsed_value"]["value"]
+            # Check if value is a list
+            if isinstance(value, list) and isinstance(found_value, list):
+                value = [i.lower() for i in value]
+                value.sort()
+                found_value = [i.lower() for i in found_value]
+                found_value.sort()
             if value == found_value:
                 compliance = "compliant"
                 reason = f"{found_value} == {value}"

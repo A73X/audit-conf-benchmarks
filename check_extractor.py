@@ -449,6 +449,11 @@ class CheckExtractor:
             value = raw_value.replace('include ', '')
             return {'operator': '==', 'value': value}
         
+        # Check for comma-separated principals (Administrators, LOCAL SERVICE, ...)
+        if ',' in raw_value:
+            items = [v.strip() for v in raw_value.split(',')]
+            return {'operator': '==', 'value': items}
+
         # Return as-is
         return {'operator': '==', 'value': raw_value}
 
