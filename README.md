@@ -4,6 +4,8 @@
 
 It allows you to **parse machine configuration extracts**, **compare them against a specified benchmark (PDF or XLSX)**, and output compliance results in XLSX format. The project is built with extensibility in mind—new parsers and converters can be easily added to support different input formats and extraction tools.
 
+⚖️ **Legal Notice:** Per Center for Internet Security (CIS) terms, CIS Benchmarks in PDF format may have restrictions on commercial use. Review and comply with the applicable CIS license/terms before any commercial use.
+
 ⚠️ **Note:** As of now, the tool only works for **Microsoft Windows configuration extracts**. Support for other platforms is planned in future updates.
 
 ---
