@@ -20,8 +20,9 @@ from helper import Helper
 import os
 
 class CisBenchmarkConverter:
-    def __init__(self):
+    def __init__(self, workdir):
         self.helper = Helper()
+        self.workdir = workdir
         # Regular expressions for extracting recommendations and cleaning text
         self.recommendation_pattern = re.compile(r'^\s*(\d+(?:\.\d+)+)\s+(.+)')  # Matches numbers like 1.1.1, 2.2.2.2, etc.
         self.remove_pattern = re.compile(r'Page\s\d{1,3}|•')
@@ -296,7 +297,7 @@ class CisBenchmarkConverter:
     def convert(self, benchmark_pdf, output_format):
         base_name = os.path.splitext(os.path.basename(benchmark_pdf))[0]
         extension = "csv" if output_format == "csv" else "xlsx"
-        output_file = self.generate_unique_filename(base_name, extension)
+        output_file = os.path.join(self.workdir, self.generate_unique_filename(base_name, extension))
         title, version = self.extract_title_and_version(benchmark_pdf)
         text = self.read_pdf(benchmark_pdf)
         recommendations = self.extract_recommendations(text)

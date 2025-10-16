@@ -26,7 +26,7 @@ class Orchestrator:
             benchmark_extension = os.path.splitext(benchmark_path)[1].lower()
 
             if benchmark_extension == ".pdf":
-                converter = CisBenchmarkConverter()
+                converter = CisBenchmarkConverter(self.workdir)
                 benchmark_xlsx = converter.convert(benchmark_path, "xlsx")
                 return benchmark_xlsx
             elif benchmark_extension == ".xlsx":

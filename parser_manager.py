@@ -9,7 +9,10 @@ class ParserManager:
     
     def __list_parsers(self):
         parsers_paths_l = []
-        for root, dirs, files in os.walk("./PARSERS/"):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parsers_dir = os.path.join(script_dir, "PARSERS")
+        
+        for root, dirs, files in os.walk(parsers_dir):
             for file in files:
                 file_path = os.path.join(root, file)
                 # Exclude __pycache__ files
