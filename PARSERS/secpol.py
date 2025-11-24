@@ -6,6 +6,7 @@ class Secpol:
         self.parsable_files_l = ['.inf']
         self.helper = Helper()
         self.key_to_keyword_mapping = {
+            "AllowAdministratorLockout": "Allow Administrator account lockout",
             "PasswordHistorySize": "Enforce password history",
             "MaximumPasswordAge": "Maximum password age",
             "MinimumPasswordAge": "Minimum password age",
@@ -14,7 +15,7 @@ class Secpol:
             "ClearTextPassword": "Store passwords using reversible encryption",
             "LockoutDuration": "Account lockout duration",
             "LockoutBadCount": "Account lockout threshold",
-            "ResetLockoutCounter": "Reset account lockout counter after",
+            "ResetLockoutCount": "Reset account lockout counter after",
             "EnableGuestAccount": "Guest account status",
             "NewAdministratorName": "Rename administrator account",
             "NewGuestName": "Rename guest account",
@@ -42,7 +43,24 @@ class Secpol:
             "SeIncreaseBasePriorityPrivilege": "Increase scheduling priority",
             "SeLoadDriverPrivilege": "Load and unload device drivers",
             "SeLockMemoryPrivilege": "Lock pages in memory",
-            "SeCreateSymbolicLinkPrivilege": "Create symbolic links"
+            "SeCreateSymbolicLinkPrivilege": "Create symbolic links",
+            "SeNetworkLogonRight": "Access this computer from the network",
+            "SeTcbPrivilege": "Act as part of the operating system",
+            "SeIncreaseQuotaPrivilege": "Adjust memory quotas for a process",
+            "SeCreatePagefilePrivilege": "Create a pagefile",
+            "SeCreateTokenPrivilege": "Create a token object",
+            "SeTrustedCredManAccessPrivilege": "Access Credential Manager as a trusted caller",
+            "SeCreateGlobalPrivilege": "Create global objects",
+            "SeCreatePermanentPrivilege": "Create permanent shared objects",
+            "SeDenyNetworkLogonRight": "Deny access to this computer from the network",
+            "SeEnableDelegationPrivilege": "Enable computer and user accounts to be trusted for delegation",
+            "SeAuditPrivilege": "Generate security audits",
+            "SeLockMemoryPrivilege": "Lock pages in memory",
+            "SeRelabelPrivilege": "Modify an object label",
+            "SeSystemEnvironmentPrivilege": "Modify firmware environment values",
+            "SeManageVolumePrivilege": "Perform volume maintenance tasks",
+            "SeProfileSingleProcessPrivilege": "Profile single process",
+            "SeSystemProfilePrivilege": "Profile system performance"
         }
 
         self.sid_to_name = {
@@ -136,7 +154,8 @@ class Secpol:
         
     def __interprete_value(self, key, value):
         keys_l = ["PasswordComplexity", "ClearTextPassword", "RequireLogonToChangePassword", 
-                  "ForceLogoffWhenHourExpire", "EnableAdminAccount", "EnableGuestAccount"]
+                  "ForceLogoffWhenHourExpire", "EnableAdminAccount", "EnableGuestAccount", 
+                  "AllowAdministratorLockout"]
         
         if any(k in key for k in keys_l):
             return self.__convert_enabled_disabled(value)
@@ -156,8 +175,14 @@ class Secpol:
         keyword_uipath_d = {}
         for key in regkeys_l:
             if key.startswith(("Computer Configuration")):
-                keyword = key.split("\\")[-1]
+                keyword = key.split("\\")[-1].strip()
+                # Check if subkey or key
+                if ':' in keyword:
+                    keyword = keyword.split(":",1)[-1].strip()
                 keyword_uipath_d[keyword] = key
+            elif key.startswith(("HKLM")):
+                newkey = key.replace("HKLM", "MACHINE").replace(":", "\\").lower()
+                keyword_uipath_d[newkey] = key
         return keyword_uipath_d
 
     def parse(self, file, regkeys_l):
@@ -193,7 +218,7 @@ class Secpol:
             if val.startswith('"') and val.endswith('"'):
                 val = val[1:-1]
 
-            # Covert to int
+            # Convert to int
             if val.isdigit():
                 val = int(val)
 
@@ -202,6 +227,15 @@ class Secpol:
                 if (key in self.key_to_keyword_mapping.keys()) and (self.key_to_keyword_mapping[key] in keyword_uipath_d.keys()):
                     values_d[keyword_uipath_d[self.key_to_keyword_mapping[key]]] = self.__interprete_value(key, val)
                     proofs_d[keyword_uipath_d[self.key_to_keyword_mapping[key]]] = file
+            elif current_section == "Registry Values":
+                key = key.lower()
+                val = val.split(',', 1)[-1].replace('"', '')
+                if val.isdigit():
+                    val = int(val)
+
+                if (key in keyword_uipath_d.keys()):
+                    values_d[keyword_uipath_d[key]] = self.__interprete_value(key, val)
+                    proofs_d[keyword_uipath_d[key]] = file
 
         # Logging
         print()

@@ -63,8 +63,12 @@ class CisBenchmarkConverter:
                         content_string += '\n' + line
                     else:
                         # Subkey splitted
-                        if '\\' in content[index + 1]:
+                        if ('\\' in content[index + 1]) or (':' in content[index + 1]):
                             content_string += '\n' + line + ' ' + content[index + 1]
+                        # New line of information, not part of regkey
+                        elif ' ' in content[index + 1]:
+                            content_string += '\n' + line + '\n'
+                            index -= 1 # Unalter index to process next line
                         # Key splitted
                         else:
                             content_string += '\n' + line + content[index + 1]

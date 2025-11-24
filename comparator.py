@@ -84,6 +84,9 @@ class Comparator:
         operator = expected_value["parsed_value"]["operator"]
         if operator == "==":
             value = expected_value["parsed_value"]["value"]
+            # Get single item list value
+            if isinstance(value, list) and len(value) == 1:
+                value = value[0]
             # Check if value is a list
             if isinstance(value, list) and isinstance(found_value, list):
                 value = [i.lower() for i in value]

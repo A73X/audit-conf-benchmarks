@@ -246,7 +246,7 @@ class CheckExtractor:
                 return {'operator': 'in', 'value': options}
         
         if condition_type in ['value_of', 'colon_value']:
-            raw_value = raw_value.strip('.,')  # Remove trailing punctuation
+            raw_value = raw_value.rstrip('.,:')  # Remove trailing punctuation
             
             # Check for "X or that the key does not exist" pattern
             key_not_exist_match = re.search(r'^(\d+|\w+|"[^"]*")\s+or\s+that\s+the\s+key\s+does\s+not\s+exist', raw_value, re.IGNORECASE)

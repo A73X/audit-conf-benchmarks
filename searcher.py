@@ -9,6 +9,7 @@ class Searcher:
         self.file_size_exclusion = 1000000000 # 1 GB
         self.helper = Helper()
         self.keyword_to_key_mapping = {
+            "Allow Administrator account lockout": "AllowAdministratorLockout",
             "Enforce password history": "PasswordHistorySize",
             "Maximum password age": "MaximumPasswordAge",
             "Minimum password age": "MinimumPasswordAge",
@@ -17,7 +18,7 @@ class Searcher:
             "Store passwords using reversible encryption": "ClearTextPassword",
             "Account lockout duration": "LockoutDuration",
             "Account lockout threshold": "LockoutBadCount",
-            "Reset account lockout counter after": "ResetLockoutCounter",
+            "Reset account lockout counter after": "ResetLockoutCount",
             "Guest account status": "EnableGuestAccount",
             "Rename administrator account": "NewAdministratorName",
             "Rename guest account": "NewGuestName",
@@ -46,7 +47,24 @@ class Searcher:
             "Load and unload device drivers": "SeLoadDriverPrivilege",
             "Lock pages in memory": "SeLockMemoryPrivilege",
             "Create symbolic links": "SeCreateSymbolicLinkPrivilege",
-            "Take ownership of files or objects": "SeTakeOwnershipPrivilege"
+            "Take ownership of files or objects": "SeTakeOwnershipPrivilege",
+            "Access this computer from the network": "SeNetworkLogonRight",
+            "Act as part of the operating system": "SeTcbPrivilege",
+            "Adjust memory quotas for a process": "SeIncreaseQuotaPrivilege",
+            "Create a pagefile": "SeCreatePagefilePrivilege",
+            "Create a token object": "SeCreateTokenPrivilege",
+            "Access Credential Manager as a trusted caller": "SeTrustedCredManAccessPrivilege",
+            "Create global objects": "SeCreateGlobalPrivilege",
+            "Create permanent shared objects": "SeCreatePermanentPrivilege",
+            "Deny access to this computer from the network": "SeDenyNetworkLogonRight",
+            "Enable computer and user accounts to be trusted for delegation": "SeEnableDelegationPrivilege",
+            "Generate security audits": "SeAuditPrivilege",
+            "Lock pages in memory": "SeLockMemoryPrivilege",
+            "Modify an object label": "SeRelabelPrivilege",
+            "Modify firmware environment values": "SeSystemEnvironmentPrivilege",
+            "Perform volume maintenance tasks": "SeManageVolumePrivilege",
+            "Profile single process": "SeProfileSingleProcessPrivilege",
+            "Profile system performance": "SeSystemProfilePrivilege"
         }
 
     def set_not_unique_key_l(self, not_unique_key_l):
