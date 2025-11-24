@@ -64,6 +64,7 @@ class Secpol:
         }
 
         self.sid_to_name = {
+            # https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/81d92bba-d22b-4a8c-908a-554ab29148ab
             # Universal well-known SIDs
             "S-1-0-0": "Null SID",
             "S-1-1-0": "Everyone",
@@ -135,6 +136,10 @@ class Secpol:
             "S-1-16-12288": "High",
             "S-1-16-16384": "System",
             "S-1-16-20480": "Protected Process",
+
+            # NT SERVICE Names
+            "S-1-5-80-2970612574-78537857-698502321-558674196-1451644582": "NT SERVICE\\DPS",
+            "S-1-5-80-3139157870-2983391045-3678747466-658725712-1809340420": "NT SERVICE\\WdiServiceHost"
         }
 
     def __sid_value(self, value):
