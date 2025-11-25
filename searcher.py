@@ -109,6 +109,8 @@ class Searcher:
         # Regkey
         if regkey.startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):
             keyword = regkey.split(":", 1)[-1].strip()
+            if '\\\\*\\' in keyword:
+                keyword = keyword.replace('\\\\*\\', '')
             # Detect if duplicated key
             if keyword in self.__not_unique_key_l:
                 # Get subkey
@@ -121,6 +123,7 @@ class Searcher:
             # Extract last part of the UI path
             if ":" in regkey:
                 keyword = regkey.split(":")[-1].strip()
+                keyword = self.__convert_keyword_secpol_compliant(keyword)
             else:
                 keyword = regkey.split("\\")[-1].strip()
                 if keyword.startswith(("Audit ")):

@@ -139,7 +139,10 @@ class Secpol:
 
             # NT SERVICE Names
             "S-1-5-80-2970612574-78537857-698502321-558674196-1451644582": "NT SERVICE\\DPS",
-            "S-1-5-80-3139157870-2983391045-3678747466-658725712-1809340420": "NT SERVICE\\WdiServiceHost"
+            "S-1-5-80-3139157870-2983391045-3678747466-658725712-1809340420": "NT SERVICE\\WdiServiceHost",
+
+            # NT VIRTUAL MACHINE
+            "S-1-5-83-0": "NT VIRTUAL MACHINE\\Virtual Machines"
         }
 
     def __sid_value(self, value):
@@ -160,7 +163,7 @@ class Secpol:
     def __interprete_value(self, key, value):
         keys_l = ["PasswordComplexity", "ClearTextPassword", "RequireLogonToChangePassword", 
                   "ForceLogoffWhenHourExpire", "EnableAdminAccount", "EnableGuestAccount", 
-                  "AllowAdministratorLockout"]
+                  "AllowAdministratorLockout", "LSAAnonymousNameLookup"]
         
         if any(k in key for k in keys_l):
             return self.__convert_enabled_disabled(value)
@@ -234,9 +237,20 @@ class Secpol:
                     proofs_d[keyword_uipath_d[self.key_to_keyword_mapping[key]]] = file
             elif current_section == "Registry Values":
                 key = key.lower()
+                val_type = int(val.split(',', 1)[0])
                 val = val.split(',', 1)[-1].replace('"', '')
-                if val.isdigit():
+                # String
+                if (val_type == 1) and val.isdigit():
                     val = int(val)
+                # Int
+                elif val_type == 4:
+                    val = int(val)
+                # Empty list
+                elif (val_type == 7) and not val:
+                    val = []
+                # List
+                elif val_type == 7:
+                    val = val.split(',')
 
                 if (key in keyword_uipath_d.keys()):
                     values_d[keyword_uipath_d[key]] = self.__interprete_value(key, val)

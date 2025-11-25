@@ -62,8 +62,11 @@ class CisBenchmarkConverter:
                     if content[index + 1].startswith(('HKLM', 'HKU', 'HKEY_LOCAL_MACHINE', 'HKEY_USERS')):
                         content_string += '\n' + line
                     else:
-                        # Subkey splitted
-                        if ('\\' in content[index + 1]) or (':' in content[index + 1]):
+                        # Subkey for Group Policy
+                        if (('-' in content[index + 1]) and ('}' in content[index + 1])) and (('\\' in content[index + 1]) or (':' in content[index + 1])):
+                            content_string += '\n' + line + content[index + 1]
+                        # Subkey splitted (check if special chars and if new line start with upper case)
+                        elif (('\\' in content[index + 1]) or (':' in content[index + 1])) and content[index + 1][0].isupper():
                             content_string += '\n' + line + ' ' + content[index + 1]
                         # New line of information, not part of regkey
                         elif ' ' in content[index + 1]:

@@ -84,7 +84,7 @@ class RegExport:
         
         for regkey in regkeys_l:
             formatted_regkey = self.__format_regkey(regkey)
-            formatted_regkeys_keys_d[formatted_regkey] = formatted_regkey.split(':')[-1].lower()
+            formatted_regkeys_keys_d[formatted_regkey] = formatted_regkey.split(':')[-1].lower().replace('\\', '\\\\')
             formatted_regkeys_bytes_d[formatted_regkey] = formatted_regkey.split(':')[0].encode(self.encoding).lower()
             formatted_regkeys_og_regkeys_d[formatted_regkey] = regkey
         return formatted_regkeys_keys_d, formatted_regkeys_bytes_d, formatted_regkeys_og_regkeys_d
@@ -116,13 +116,13 @@ class RegExport:
                 if key in line_content.lower():
                     # Check if multiline value
                     if line_content.endswith(('\\')):
-                        raw_value = line_content.split('=')[-1][:-1] # Remove trailing \
+                        raw_value = line_content.split('=', 1)[-1][:-1] # Remove trailing \
                         line_start = line_end + len(self.new_line)
                         raw_value += self.__extract_multiline_value(mm, line_start)
                         value = self.__convert_value(raw_value)
                         return value
                     else:
-                        raw_value = line_content.split('=')[-1]
+                        raw_value = line_content.split('=', 1)[-1]
                         value = self.__convert_value(raw_value)
                         return value
                 else:
@@ -162,6 +162,9 @@ class RegExport:
             value = raw_value[1:-1] # Remove quotes
             if value.isdigit():
                 value = int(value)
+            elif ',' in value:
+                value = value.split(',')
+                value = [i.strip() for i in value]
             return value
         elif reg_type == "dword": # 32-bit unsigned int
             return int(value, 16)
