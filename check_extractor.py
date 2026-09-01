@@ -6,6 +6,7 @@ class CheckExtractor:
         self.helper = Helper()
         self.checks_l = []
         self.checks_values_d = {}
+        self.default_values_d = {}
         self.not_unique_key_l = []
         self.__processed_keys_l = []
         self.__regkey_pattern = re.compile(r'^(HKLM|HKU|HKEY_LOCAL_MACHINE|HKEY_USERS)\\.*', re.MULTILINE)
@@ -15,7 +16,8 @@ class CheckExtractor:
         benchmark_sheet=0 # first sheet
         audit_column=9 # column (I)
         remediation_column=10 # column (J)
-        
+        default_value_column=11 # column (K)
+
         self.helper.log_info("Starting checks extraction from XLSX")
         # Load the workbook
         workbook = openpyxl.load_workbook(benchmark_xlsx, read_only=True)
@@ -32,6 +34,7 @@ class CheckExtractor:
             cell_value = sheet.cell(row=row, column=audit_column).value
             # Check if string (empty cell are NoneType)
             if isinstance(cell_value, str):
+                default_value_raw = sheet.cell(row=row, column=default_value_column).value
                 regkeys_l = self.__get_regkeys_in_audit_cell(cell_value)
                 if not regkeys_l:
                     # Get the cell value at remediation column
@@ -39,9 +42,11 @@ class CheckExtractor:
                     ui_paths_l = self.__get_ui_paths_in_remediation_cell(cell_value)
                     self.checks_l.append(ui_paths_l)
                     self.__get_values_in_remediation_cell(cell_value, ui_paths_l)
+                    self.__store_default_values(ui_paths_l, default_value_raw)
                 else:
                     self.checks_l.append(regkeys_l)
                     self.__get_values_in_audit_cell(cell_value, regkeys_l)
+                    self.__store_default_values(regkeys_l, default_value_raw)
             row+=1
         workbook.close()
         self.helper.log_info(f"Successfully extracted {len(self.checks_l)} checks from XLSX")
@@ -457,6 +462,118 @@ class CheckExtractor:
 
         # Return as-is
         return {'operator': '==', 'value': raw_value}
+
+    def __store_default_values(self, keys_l, default_value_raw):
+        if not keys_l:
+            return
+        parsed = self.parse_default_value(default_value_raw)
+        for key in keys_l:
+            self.default_values_d[key] = parsed
+
+    # Common English words that indicate a comma belongs to a sentence, not a list of principals
+    __sentence_words = re.compile(
+        r'\b(are|is|was|were|be|been|being|have|has|had|do|does|did|will|would|could|should|'
+        r'may|might|must|shall|only|not|the|a|an|because|when|that|this|with|from|which|'
+        r'those|these|their|they|allowed|enabled|disabled|packets|forwarding|protection|'
+        r'additional|ignored|response|controllers|accept|sends|suggest|support)\b',
+        re.IGNORECASE
+    )
+
+    def parse_default_value(self, raw):
+        if not raw or not isinstance(raw, str):
+            return None
+        text = raw.strip()
+
+        # --- Ambiguous: cannot determine a single value → None (check manually) ---
+
+        # Version-conditional: "On Windows 10...: X" or "Windows 7: X. Windows 8: Y."
+        if re.search(r'\bon\s+windows\s+\d', text, re.IGNORECASE):
+            return None
+        if re.match(r'^windows\s+\d', text, re.IGNORECASE):
+            return None
+        # Context-conditional: domain vs stand-alone
+        if re.search(r'on\s+(domain|stand-?alone)', text, re.IGNORECASE):
+            return None
+        # Security-update-conditional: "Without the May 2018 update: X. With: Y."
+        if re.match(r'^without\s+the\b', text, re.IGNORECASE):
+            return None
+
+        # --- Not Configured / Not Defined → sentinel: key is absent ---
+        if re.search(r'\bnot\s+(configured|defined)\b', text, re.IGNORECASE):
+            return "NOT_CONFIGURED"
+
+        # --- Hex values ---
+        # "0x00000002 (2)" → prefer the decimal in parentheses
+        paren_hex = re.search(r'0x[0-9a-fA-F]+\s*\((\d+)\)', text)
+        if paren_hex:
+            return int(paren_hex.group(1))
+        plain_hex = re.search(r'\b0x([0-9a-fA-F]+)\b', text)
+        if plain_hex:
+            return int(plain_hex.group(1), 16)
+
+        # --- Service states (must come before Enabled/Disabled to avoid "Disabled"→0 for :Start keys) ---
+        # "Not Installed" means the service is absent → registry key does not exist → treat as effectively Disabled (4)
+        if re.match(r'^Not Installed\b', text, re.IGNORECASE):
+            return 4
+        if re.match(r'^Manual\s*\(Trigger Start\)', text, re.IGNORECASE) or re.match(r'^Manual\.?$', text, re.IGNORECASE):
+            return 3
+        if re.match(r'^Automatic\s*\(Delayed Start\)', text, re.IGNORECASE) or re.match(r'^Automatic\.?$', text, re.IGNORECASE):
+            return 2
+
+        # --- Enabled / Disabled with optional colon-integer suffix ---
+        # "Enabled: 3 - Auto download..." → 3
+        enabled_int = re.match(r'^Enabled\s*:\s*(\d+)', text, re.IGNORECASE)
+        if enabled_int:
+            return int(enabled_int.group(1))
+        # "Disabled" at start → 0
+        if re.match(r'^Disabled[\s.,:]', text, re.IGNORECASE) or re.match(r'^Disabled$', text, re.IGNORECASE):
+            return 0
+        # "Enabled" at start → 1
+        if re.match(r'^Enabled[\s.,]', text, re.IGNORECASE) or re.match(r'^Enabled$', text, re.IGNORECASE):
+            return 1
+
+        # --- Yes / No / On / Off ---
+        # --- Audit policy states (before Yes/No to avoid "No Auditing" being caught as No→0) ---
+        if re.match(r'^No Auditing\.?$', text, re.IGNORECASE):
+            return "No Auditing"
+        if re.match(r'^Success and Failure\.?$', text, re.IGNORECASE):
+            return "Success and Failure"
+        if re.match(r'^Success\.?$', text, re.IGNORECASE):
+            return "Success"
+        if re.match(r'^Failure\.?$', text, re.IGNORECASE):
+            return "Failure"
+
+        # --- Empty / no-one (before Yes/No to avoid "No one" being caught as No→0) ---
+        if re.match(r'^(No one|None)\.?$', text, re.IGNORECASE):
+            return "No One"
+
+        # --- Yes / No / On / Off ---
+        # "No" only matches when followed directly by punctuation or paren (not a word like "No one", "No Auditing")
+        if re.match(r'^Yes[\s.,\(]', text, re.IGNORECASE) or re.match(r'^Yes$', text, re.IGNORECASE):
+            return 1
+        if re.match(r'^No\s*[\.,\(]', text, re.IGNORECASE) or re.match(r'^No$', text, re.IGNORECASE):
+            return 0
+        if re.match(r'^On[\s.,\(]', text, re.IGNORECASE) or re.match(r'^On$', text, re.IGNORECASE):
+            return 1
+        if re.match(r'^Off[\s.,\(]', text, re.IGNORECASE) or re.match(r'^Off$', text, re.IGNORECASE):
+            return 0
+
+        # --- Leading integer (e.g. "4,096 KB", "7,200,000 ms", "0 failed logon attempts") ---
+        leading_num = re.match(r'^([\d,]+)', text)
+        if leading_num:
+            num_str = leading_num.group(1).replace(',', '')
+            if num_str.isdigit():
+                return int(num_str)
+
+        # --- Comma-separated list of principals ---
+        # Only when: single sentence (no ". Capital"), and no item looks like a clause
+        if ',' in text and not re.search(r'\.\s+[A-Z]', text):
+            items = [v.strip().rstrip('.') for v in text.split(',') if v.strip()]
+            if items and not any(self.__sentence_words.search(item) for item in items):
+                return items
+
+        # Unrecognised / descriptive enum text → cannot map to a value
+        return None
 
     def __check_duplicate_key(self, regkey):
         # Regkey

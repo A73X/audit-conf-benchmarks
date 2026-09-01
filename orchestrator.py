@@ -51,7 +51,7 @@ class Orchestrator:
             else:
                 self.__proofs_d[regkey] = [found_proofs_d[regkey]]
 
-    def audit(self):
+    def audit(self, use_defaults=False):
         self.benchmark_path = self.__check_benchmark(self.benchmark_path)
         self.checkExtractor.extract_checks_from_xlsx(self.benchmark_path)
         self.searcher.set_not_unique_key_l(self.checkExtractor.not_unique_key_l)
@@ -71,11 +71,32 @@ class Orchestrator:
         self.helper.log_info("Starting compliance auditing phase")
         self.comparator.set_checks_l(self.checkExtractor.checks_l)
         self.comparator.set_checks_values_d(self.checkExtractor.checks_values_d)
+        self.comparator.set_default_values_d(self.checkExtractor.default_values_d)
+        self.comparator.set_use_defaults(use_defaults)
         self.comparator.set_values_d(self.__values_d)
         compliance_l, reason_l = self.comparator.eval_compliance()
         self.helper.log_info("End of compliance auditing phase")
+
+        if not use_defaults:
+            self.__suggest_use_defaults(reason_l)
 
         self.helper.log_info("Starting XLSX writing phase")
         self.xlsxWriter.set_benchmark_xlsx_path(self.benchmark_path)
         self.xlsxWriter.write(self.checkExtractor.checks_l, self.__values_d, self.__proofs_d, compliance_l, reason_l)
         self.helper.log_info("End of XLSX writing phase")
+
+    def __suggest_use_defaults(self, reason_l):
+        missing_count = sum(
+            1 for reasons in reason_l
+            for r in reasons
+            if "No value found" in r
+        )
+        total = len(reason_l)
+        if total == 0:
+            return
+        if missing_count > 0:
+            pct = missing_count * 100 // total
+            self.helper.log_info(
+                f"Tip: {missing_count}/{total} checks ({pct}%) had keys not found on this machine. "
+                f"Run with -d / --use-defaults to evaluate them against the benchmark's documented default values."
+            )
