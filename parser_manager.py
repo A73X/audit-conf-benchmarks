@@ -1,9 +1,11 @@
 import os, importlib, inspect
+from helper import Helper
 
 class ParserManager:
     def __init__(self):
         self.parsers_paths_l = []
         self.parsers_l = []
+        self.helper = Helper()
         self.__list_parsers()
         self.__load_parsers()
     
@@ -41,10 +43,10 @@ class ParserManager:
                             parser_instance = obj()
                             parsers_l.append(parser_instance)
                         except Exception as e:
-                            print(f"Failed to instantiate parser {name}: {e}")
-                            
+                            self.helper.log_warning(f"Failed to instantiate parser {name}: {e} — files handled by this parser will NOT be audited")
+
             except Exception as e:
-                print(f"Failed to load module from {parser_path}: {e}")
+                self.helper.log_warning(f"Failed to load module from {parser_path}: {e} — files handled by this parser will NOT be audited")
         self.parsers_l = parsers_l
 
     def parse(self, file, regkeys_l):
@@ -53,5 +55,7 @@ class ParserManager:
                 if parsable_file in file:
                     found_values_d, found_proofs_d  = parser.parse(file, regkeys_l)
                     return found_values_d, found_proofs_d
-        # No parser matched
+        # No parser matched: distinct from "parsed, nothing found" -- surface it so it
+        # isn't mistaken for evidence that these regkeys are genuinely absent.
+        self.helper.log_warning(f"No parser matched {file} — {len(regkeys_l)} candidate regkey(s) in this file were NOT checked")
         return {}, {}

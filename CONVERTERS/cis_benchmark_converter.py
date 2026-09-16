@@ -17,19 +17,18 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl import Workbook
 from helper import Helper
-import os
+import os, tempfile
 
 class CisBenchmarkConverter:
     def __init__(self, workdir):
         self.helper = Helper()
         self.workdir = workdir
         # Regular expressions for extracting recommendations and cleaning text
-        self.recommendation_pattern = re.compile(r'^\s*(\d+(?:\.\d+)+)\s+(.+)')  # Matches numbers like 1.1.1, 2.2.2.2, etc.
-        self.remove_pattern = re.compile(r'Page\s\d{1,3}|•')
         self.title_pattern = re.compile(r'^(\d+\.\d+(?:\.\d+)*)\s*(\(L\d+\))?\s*(.*)')
 
-        # Pattern to remove page numbers (e.g., "Page 123")
-        self.page_number_pattern = re.compile(r'\bPage\s+\d+\b', re.IGNORECASE)
+        # Pattern to remove page numbers -- covers "Page 123" and this CIS PDF's footer
+        # format "123 | P age" (pdfplumber preserves the justified-text gap inside "Page").
+        self.page_number_pattern = re.compile(r'\bPage\s+\d+\b|\b\d+\s*\|\s*P\s*a\s*g\s*e\b', re.IGNORECASE)
 
         # Sections to extract
         self.sections = [
@@ -112,70 +111,83 @@ class CisBenchmarkConverter:
     def write_output(self, recommendations, output_file, output_format, title, version):
         self.helper.log_info(f"Writing output to {output_file} in {output_format.upper()} format")
 
-        if output_format == 'csv':
-            headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs', "Reason"]
-            with open(output_file, mode='w', newline='', encoding='utf-8') as file:
-                writer = csv.writer(file, delimiter='|')
-                writer.writerow([title if title else "CIS Benchmark Document"])
-                writer.writerow([version if version else ""])
-                writer.writerow([])  # Empty row for spacing
-                writer.writerow(headers)  # Column headers
+        # Write to a temp file in the same directory, then atomically replace the target
+        # so an interrupted/failed write never leaves a corrupt benchmark file at the final path.
+        target_dir = os.path.dirname(os.path.abspath(output_file)) or "."
+        fd, tmp_path = tempfile.mkstemp(dir=target_dir, suffix=f".{output_format}.tmp")
+        os.close(fd)
 
-                for recommendation in recommendations:
+        try:
+            if output_format == 'csv':
+                headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs', "Reason"]
+                with open(tmp_path, mode='w', newline='', encoding='utf-8') as file:
+                    writer = csv.writer(file, delimiter='|')
+                    writer.writerow([title if title else "CIS Benchmark Document"])
+                    writer.writerow([version if version else ""])
+                    writer.writerow([])  # Empty row for spacing
+                    writer.writerow(headers)  # Column headers
+
+                    for recommendation in recommendations:
+                        recommendation['Compliance Status'] = 'check manually'
+                        row = [recommendation.get(header, '') for header in headers]
+                        writer.writerow(row)
+                os.replace(tmp_path, output_file)
+
+            else:
+                workbook = Workbook()
+                sheet = workbook.active
+                sheet.title = "Recommendations"
+                sheet["A1"] = title if title else "CIS Benchmark Document"
+                sheet["A1"].font = Font(size=14, bold=True)
+                sheet["A2"] = version if version else ""
+                sheet["A2"].font = Font(size=12, italic=True)
+
+                headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs', "Reason"]
+                sheet.append([""] * len(headers))  # Empty row for spacing
+                sheet.append(headers)
+
+                for row_idx, recommendation in enumerate(recommendations, start=5):
                     recommendation['Compliance Status'] = 'check manually'
                     row = [recommendation.get(header, '') for header in headers]
-                    writer.writerow(row)
+                    sheet.append(row)
 
-        else:
-            workbook = Workbook()
-            sheet = workbook.active
-            sheet.title = "Recommendations"
-            sheet["A1"] = title if title else "CIS Benchmark Document"
-            sheet["A1"].font = Font(size=14, bold=True)
-            sheet["A2"] = version if version else ""
-            sheet["A2"].font = Font(size=12, italic=True)
+                dv = DataValidation(type="list", formula1='"compliant,non-compliant,check manually"', showDropDown=False)
+                sheet.add_data_validation(dv)
+                for row_idx in range(5, len(recommendations) + 5):
+                    dv.add(sheet[f"A{row_idx}"])
 
-            headers = ['Compliance Status', 'Number', 'Level', 'Title'] + [sec[:-1] for sec in self.sections if sec != 'CIS Controls:'] + ['Machine Value', 'Proofs', "Reason"]
-            sheet.append([""] * len(headers))  # Empty row for spacing
-            sheet.append(headers)
+                compliant_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                non_compliant_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+                check_manually_fill = PatternFill(start_color="FDDA0D", end_color="FDDA0D", fill_type="solid")
+                compliant_rule = FormulaRule(formula=['$A5="compliant"'], fill=compliant_fill)
+                non_compliant_rule = FormulaRule(formula=['$A5="non-compliant"'], fill=non_compliant_fill)
+                check_manually_rule = FormulaRule(formula=['$A5="check manually"'], fill=check_manually_fill)
 
-            for row_idx, recommendation in enumerate(recommendations, start=5):
-                recommendation['Compliance Status'] = 'check manually'
-                row = [recommendation.get(header, '') for header in headers]
-                sheet.append(row)
+                sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", compliant_rule)
+                sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", non_compliant_rule)
+                sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", check_manually_rule)
 
-            dv = DataValidation(type="list", formula1='"compliant,non-compliant,check manually"', showDropDown=False)
-            sheet.add_data_validation(dv)
-            for row_idx in range(5, len(recommendations) + 5):
-                dv.add(sheet[f"A{row_idx}"])
+                # Add table style
+                tab = Table(displayName="CISRecommendations", ref=f"A4:{chr(65+len(headers)-1)}{len(recommendations) + 4}")
+                style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=True)
+                tab.tableStyleInfo = style
+                sheet.add_table(tab)
 
-            compliant_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-            non_compliant_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-            check_manually_fill = PatternFill(start_color="FDDA0D", end_color="FDDA0D", fill_type="solid")
-            compliant_rule = FormulaRule(formula=['$A5="compliant"'], fill=compliant_fill)
-            non_compliant_rule = FormulaRule(formula=['$A5="non-compliant"'], fill=non_compliant_fill)
-            check_manually_rule = FormulaRule(formula=['$A5="check manually"'], fill=check_manually_fill)
-            
-            sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", compliant_rule)
-            sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", non_compliant_rule)
-            sheet.conditional_formatting.add(f"A5:A{len(recommendations) + 5}", check_manually_rule)
+                # Set column widths
+                sheet.column_dimensions['A'].width = 10  # Compliance Status
+                sheet.column_dimensions['B'].width = 8  # Number (default width)
+                sheet.column_dimensions['C'].width = 8  # Level (default width)
+                sheet.column_dimensions['D'].width = 50  # Title
+                for col in range(5, 16):  # Columns E to P (Profile Applicability to References)
+                    sheet.column_dimensions[chr(64 + col)].width = 10
 
-            # Add table style
-            tab = Table(displayName="CISRecommendations", ref=f"A4:{chr(65+len(headers)-1)}{len(recommendations) + 4}")
-            style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=True)
-            tab.tableStyleInfo = style
-            sheet.add_table(tab)
-
-            # Set column widths
-            sheet.column_dimensions['A'].width = 10  # Compliance Status
-            sheet.column_dimensions['B'].width = 8  # Number (default width)
-            sheet.column_dimensions['C'].width = 8  # Level (default width)
-            sheet.column_dimensions['D'].width = 50  # Title
-            for col in range(5, 16):  # Columns E to P (Profile Applicability to References)
-                sheet.column_dimensions[chr(64 + col)].width = 10
-
-            workbook.save(output_file)
-            workbook.close()
+                workbook.save(tmp_path)
+                workbook.close()
+                os.replace(tmp_path, output_file)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
 
         self.helper.log_info(f"Finished writing {len(recommendations)} recommendations to {output_file}.")
 
@@ -189,7 +201,10 @@ class CisBenchmarkConverter:
             # Start reading from page 10 to skip the table of contents
             for page_number, page in enumerate(pdf.pages[9:], start=10):
                 page_text = page.extract_text()
-                
+                if page_text is None:
+                    self.helper.log_warning(f"Page {page_number}/{total_pages} has no extractable text (scanned/image-only page?) -- skipping.")
+                    page_text = ""
+
                 # Display progress
                 self.helper.log_info(f"Processing page {page_number}/{total_pages}", end="\r", flush=True)
                 
@@ -203,6 +218,12 @@ class CisBenchmarkConverter:
                         self.helper.log_debug("End of Recommendations section reached.")
                         break
                     text.append(page_text)
+
+        if not extraction_started:
+            raise RuntimeError(
+                f"'{input_file}' : the 'Recommendations' section header was never found "
+                "(PDF layout may have changed) -- refusing to produce an empty benchmark file."
+            )
 
         self.helper.log_info("Completed reading the PDF file.")
         return '\n'.join(text)
@@ -308,5 +329,9 @@ class CisBenchmarkConverter:
         title, version = self.extract_title_and_version(benchmark_pdf)
         text = self.read_pdf(benchmark_pdf)
         recommendations = self.extract_recommendations(text)
+        if not recommendations:
+            raise RuntimeError(
+                f"'{benchmark_pdf}' : 0 recommendations extracted -- refusing to produce an empty benchmark file."
+            )
         self.write_output(recommendations, output_file, output_format, title, version)
         return output_file

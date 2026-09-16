@@ -8,11 +8,13 @@ class RegExport:
         self.encoding = 'utf-16-le'
         self.new_line = b'\r\x00\n\x00'
         self.helper = Helper()
+        self.__decode_issues = 0
 
     def parse(self, file, regkeys_l):
         formatted_regkeys_keys_d, formatted_regkeys_bytes_d, formatted_regkeys_og_regkeys_d = self.__prepare_dicts_for_parsing(regkeys_l)
         found_values_d = {}
         found_proofs_d = {}
+        self.__decode_issues = 0
         with open(file, "r", encoding=self.encoding, errors='ignore') as f:
             with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 line_start = 0
@@ -36,7 +38,7 @@ class RegExport:
 
                         if regkey_b in line_bytes:
                             # Decode line only when we find a match
-                            line_content = line_bytes.decode(self.encoding, errors='ignore')
+                            line_content = self.__decode(line_bytes)
                             subkey = formatted_regkeys_bytes_d[regkey_f].decode(self.encoding, errors='ignore')
                             # Check if exact subkey in line
                             if f'{subkey}]' in line_content:
@@ -59,9 +61,19 @@ class RegExport:
                         break
                     else:
                         line_start = self.__move_to_next_line(mm, line_end)
-        # Logging
+        # Logging (forced to show the final count even if throttled)
+        self.helper.log_loading(f"Found {len(found_values_d.keys())}/{len(regkeys_l)} potential values in {file} with {self.name} parser", force=True)
         print()
+        if self.__decode_issues:
+            self.helper.log_warning(f"{file} : {self.__decode_issues} unreadable character(s) detected (encoding likely incorrect) — verify this file manually")
         return found_values_d, found_proofs_d
+
+    def __decode(self, raw_bytes):
+        # errors='replace' keeps text structure intact (unlike 'ignore', which silently
+        # drops bytes) and lets us detect + report damaged input instead of hiding it.
+        text = raw_bytes.decode(self.encoding, errors='replace')
+        self.__decode_issues += text.count('�')
+        return text
     
     def __find_end_of_line(self, mm, line_start):
         # Find end of current line
@@ -111,14 +123,20 @@ class RegExport:
             line_end = self.__find_end_of_line(mm, line_start)
             # Extract line bytes
             line_bytes = mm[line_start:line_end]
-            line_content = line_bytes.decode(self.encoding, errors='ignore')
+            line_content = self.__decode(line_bytes)
             if line_content:
                 if key in line_content.lower():
                     # Check if multiline value
                     if line_content.endswith(('\\')):
                         raw_value = line_content.split('=', 1)[-1][:-1] # Remove trailing \
                         line_start = line_end + len(self.new_line)
-                        raw_value += self.__extract_multiline_value(mm, line_start)
+                        multiline_tail = self.__extract_multiline_value(mm, line_start)
+                        if multiline_tail is None:
+                            # Key was found but its multiline continuation is malformed/truncated --
+                            # distinct from "key absent", so this must not look like ordinary missing evidence.
+                            self.helper.log_warning(f"{key} : malformed multiline value (truncated continuation) — treating as unreadable, verify manually")
+                            return None
+                        raw_value += multiline_tail
                         value = self.__convert_value(raw_value)
                         return value
                     else:
@@ -137,7 +155,10 @@ class RegExport:
             line_end = self.__find_end_of_line(mm, line_start)
             # Extract line bytes
             line_bytes = mm[line_start:line_end].lower()
-            line_content = line_bytes.decode(self.encoding, errors='ignore').strip()
+            line_content = self.__decode(line_bytes).strip()
+            if not line_content:
+                # Blank line before the continuation closed: malformed/truncated value.
+                return None
             # Detect new key
             if not line_content.startswith(('"')):
                 # Detect end of value with \ char
@@ -147,6 +168,9 @@ class RegExport:
                 else:
                     value += line_content
                     return value
+            else:
+                # Ran into the next key before the continuation closed: malformed/truncated value.
+                return None
     
     def __convert_value(self, raw_value):
         # Get value type

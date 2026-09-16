@@ -74,6 +74,10 @@ class Searcher:
         file_paths_l = []
         for root, dirs, files in os.walk(workdir):
             for file in files:
+                # Skip office lock files (LibreOffice ".~lock.name#", MS Office "~$name") --
+                # never real extract content, and briefly non-existent while the owning app saves.
+                if file.startswith(".~lock.") or file.startswith("~$"):
+                    continue
                 file_paths_l.append(os.path.join(root, file))
         self.workdir_files_l = file_paths_l
     
@@ -98,12 +102,6 @@ class Searcher:
             raw_data = f.read(8192) # Read first 8KB for detection
             result = chardet.detect(raw_data)
             return result['encoding'] if result['confidence'] > 0.7 else 'utf-8'
-    
-    def __case_insensitive_find(self, data, keyword):
-        # Converts to lowercase
-        data_lower = bytes(data).lower()
-        keyword_lower = keyword.lower()
-        return data_lower.find(keyword_lower)
     
     def __regkey_to_keyword(self, regkey):
         # Regkey
@@ -155,16 +153,24 @@ class Searcher:
                 with open(file, "r", encoding=encoding, errors='ignore') as f:
                     with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                         content = bytes(mm).lower()
+                        keyword_encoding = 'utf-8' if encoding == 'utf-8-sig' else encoding
                         for regkey, keyword in keywords_d.items():
                             self.helper.log_loading(f"Searching for potential values in {file_counter}/{nb_files} files for parsing")
-                            if content.find(keyword.encode(encoding).lower()) != -1:
+                            try:
+                                # utf-8-sig adds a BOM when encoding the keyword, so it
+                                # only matches when the keyword starts the file.
+                                keyword_bytes = keyword.encode(keyword_encoding).lower()
+                            except UnicodeEncodeError as e:
+                                self.helper.log_warning(f"Skipping keyword for {regkey} in {file}: {type(e).__name__}: {e}")
+                                continue
+                            if content.find(keyword_bytes) != -1:
                                 # Update dict
                                 regkeys_per_file_d.setdefault(file, []).append(regkey)
                 file_counter += 1
             except Exception as e:
-                # Print or log errors like permission issues
-                print(f"Skipping {file}: {e}")
+                self.helper.log_warning(f"Skipping {file}: {type(e).__name__}: {e}")
 
-        # Logging
+        # Logging (forced to show the final count even if throttled)
+        self.helper.log_loading(f"Searching for potential values in {nb_files}/{nb_files} files for parsing", force=True)
         print()
         return regkeys_per_file_d

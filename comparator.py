@@ -57,7 +57,7 @@ class Comparator:
                             reason = f"{key} : Different values found"
                     else:
                         # If found_values is not a list, treat it as a single value.
-                        compliance, reason = self.__comparator(key, found_value)
+                        compliance, reason = self.__comparator(key, found_values)
 
                 # Store compliance and reason for key
                 compliance_keys_l.append(compliance)
@@ -78,10 +78,11 @@ class Comparator:
     def __normalize(self, v, other):
         """Normalize Enabled/Disabled strings to int when the other side is numeric, and vice versa."""
         _map = {"enabled": 1, "disabled": 0}
+        _reverse_map = {1: "enabled", 0: "disabled"}
         if isinstance(v, str) and isinstance(other, int) and v.lower() in _map:
             return _map[v.lower()]
-        if isinstance(v, int) and isinstance(other, str) and other.lower() in _map:
-            return _map.get(str(v), v)  # 1→"enabled" side already handled by swapped call
+        if isinstance(v, int) and isinstance(other, str) and other.lower() in _map and v in _reverse_map:
+            return _reverse_map[v]
         return v
 
     def __comparator(self, key, found_value):
@@ -95,7 +96,10 @@ class Comparator:
             compliance = "check manually"
             reason = f"Unexpected format for {key} : {expected_value}"
             return compliance, reason
-        elif expected_value["condition_type"] == "unknown":
+        elif not isinstance(expected_value.get("parsed_value"), dict):
+            # Covers condition_type 'unknown' (parsed_value is a raw string) and 'empty'
+            # (parsed_value is None) alike -- anything that isn't a comparable {operator, value}
+            # dict must go to manual review instead of crashing on ["operator"].
             compliance = "check manually"
             reason = "Operator not found"
             return compliance, reason
@@ -124,7 +128,12 @@ class Comparator:
             value = expected_value["parsed_value"]["value"]
             # Normalize Enabled/Disabled ↔ 1/0 so "Enabled" in [1, 2] works
             found_value = self.__normalize(found_value, value[0] if value else found_value)
-            if found_value in value:
+            # Case-insensitive membership test when comparing strings
+            if isinstance(found_value, str):
+                is_member = found_value.lower() in [v.lower() if isinstance(v, str) else v for v in value]
+            else:
+                is_member = found_value in value
+            if is_member:
                 compliance = "compliant"
                 reason = f"{found_value} in {value}"
             else:
@@ -224,17 +233,17 @@ class Comparator:
     def __comparator_with_default(self, key):
         default_value = self.default_values_d[key]
 
-        # "NOT_CONFIGURED" means the key is absent on the machine.
-        # Check whether the expected value explicitly allows key absence.
+        # "NOT_CONFIGURED" means the key is absent by default on the machine.
+        # Only compliant if the benchmark explicitly allows key absence (e.g. "X or that
+        # the key does not exist") -- otherwise the benchmark requires the key to be
+        # explicitly configured, so absence is non-compliant.
         if default_value == "NOT_CONFIGURED":
             expected = self.checks_values_d.get(key)
             if isinstance(expected, dict) and isinstance(expected.get("parsed_value"), dict):
                 parsed = expected["parsed_value"]
-                # The value expression "X or that the key does not exist" was already
-                # normalised to operator == by the extractor, so key absence is compliant.
-                if parsed.get("operator") == "==":
-                    return "compliant", f"[default] {key} : key not found, default is NOT_CONFIGURED (key absent) == {parsed.get('value')}"
-            return "non-compliant", f"[default] {key} : key not found, default is NOT_CONFIGURED (key absent)"
+                if parsed.get("key_absence_compliant"):
+                    return "compliant", f"[default] {key} : key not found, default is NOT_CONFIGURED (key absent) — explicitly allowed by benchmark == {parsed.get('value')}"
+            return "non-compliant", f"[default] {key} : key not found, default is NOT_CONFIGURED (key absent), benchmark requires explicit configuration"
 
         compliance, reason = self.__comparator(key, default_value)
         return compliance, f"[default] {reason}"

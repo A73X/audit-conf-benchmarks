@@ -39,6 +39,7 @@ audit-conf-benchmarks -b benchmark.xlsx -w ./workdir
 ### Arguments
 - `--benchmark, -b` → Path to the benchmark file (PDF or XLSX).  
 - `--workdir, -w` → The directory containing extracted configuration files to audit.  
+- `--use-defaults, -d` → Evaluate compliance using the benchmark's documented default value when a key is not found on the machine.  
 
 ### Example
 ```bash

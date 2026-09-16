@@ -1,5 +1,6 @@
 from helper import Helper
 import openpyxl
+import os, tempfile
 
 class XlsxWriter:
     def __init__(self):
@@ -35,9 +36,19 @@ class XlsxWriter:
             # Logging
             self.helper.log_info(f"{i+1}/{len(checks)} checks written in {self.benchmark_xlsx}", end="\r", flush=True)
 
-        # Save changes
-        workbook.save(self.benchmark_xlsx)
-        workbook.close()
+        # Save to a temp file in the same directory, then atomically replace the target
+        # so an interrupted/failed save never leaves a corrupt report at the final path.
+        target_dir = os.path.dirname(os.path.abspath(self.benchmark_xlsx)) or "."
+        fd, tmp_path = tempfile.mkstemp(dir=target_dir, suffix=".xlsx.tmp")
+        os.close(fd)
+        try:
+            workbook.save(tmp_path)
+            workbook.close()
+            os.replace(tmp_path, self.benchmark_xlsx)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
 
         # Logging
         print()

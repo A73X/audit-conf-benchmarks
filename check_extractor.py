@@ -91,8 +91,7 @@ class CheckExtractor:
     
     def __get_values_in_audit_cell(self, cell_value, regkeys_l):
         cell_value_lines = cell_value.split('\n')
-        line_values = ""
-        
+
         value_extracted = False
         for line in cell_value_lines:
             if "REG_" in line:
@@ -105,10 +104,10 @@ class CheckExtractor:
                     # Handle multi-type mappings
                     if isinstance(parsed_value, dict) and parsed_value.get('operator') == 'multi_type_mapping':
                         mappings = parsed_value['mappings']
-                        
+
                         for regkey in regkeys_l:
                             key_name = regkey.split(':')[-1] if ':' in regkey else regkey
-                            
+
                             if key_name in mappings:
                                 mapping_info = mappings[key_name]
                                 specific_reg_info = {
@@ -118,18 +117,16 @@ class CheckExtractor:
                                     'parsed_value': {'operator': '==', 'value': mapping_info['value']}
                                 }
                                 self.checks_values_d[regkey] = specific_reg_info
-                                value_extracted = True
-                            else:
-                                value_extracted = False
-                    
+                                value_extracted = value_extracted or True
+
                     # Handle single-type key mappings
                     elif isinstance(parsed_value, dict) and parsed_value.get('operator') == 'key_mapping':
                         mappings = parsed_value['mappings']
-                        
+
                         for regkey in regkeys_l:
                             # Extract the key name from the registry path (last part after :)
                             key_name = regkey.split(':')[-1] if ':' in regkey else regkey
-                            
+
                             if key_name in mappings:
                                 specific_value = mappings[key_name]
                                 specific_reg_info = {
@@ -139,9 +136,7 @@ class CheckExtractor:
                                     'parsed_value': {'operator': '==', 'value': specific_value}
                                 }
                                 self.checks_values_d[regkey] = specific_reg_info
-                                value_extracted = True
-                            else:
-                                value_extracted = False
+                                value_extracted = value_extracted or True
                     else:
                         # Handle normal case (same value for all keys)
                         for regkey in regkeys_l:
@@ -259,7 +254,8 @@ class CheckExtractor:
                 value = key_not_exist_match.group(1).strip('"\'')
                 if value.isdigit():
                     value = int(value)
-                return {'operator': '==', 'value': value}
+                # Only this explicit benchmark wording allows key absence to be compliant.
+                return {'operator': '==', 'value': value, 'key_absence_compliant': True}
             
             # Check for "X for each rule" pattern
             for_each_match = re.search(r'^(\d+|\w+|"[^"]*")\s+for\s+each\s+rule', raw_value, re.IGNORECASE)

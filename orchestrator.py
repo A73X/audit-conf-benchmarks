@@ -6,6 +6,7 @@ from comparator import Comparator
 from xlsx_writer import XlsxWriter
 from helper import Helper
 import os
+import time
 
 class Orchestrator:
     def __init__(self, benchmark_path, workdir):
@@ -22,20 +23,17 @@ class Orchestrator:
         self.xlsxWriter = XlsxWriter()
         
     def __check_benchmark(self, benchmark_path):
-        try:
-            benchmark_extension = os.path.splitext(benchmark_path)[1].lower()
+        benchmark_extension = os.path.splitext(benchmark_path)[1].lower()
 
-            if benchmark_extension == ".pdf":
-                converter = CisBenchmarkConverter(self.workdir)
-                benchmark_xlsx = converter.convert(benchmark_path, "xlsx")
-                return benchmark_xlsx
-            elif benchmark_extension == ".xlsx":
-                return benchmark_path
-            else:
-                raise ValueError("Unsupported benchmark file type : " + benchmark_extension)
-        except FileNotFoundError:
-            print(f"Error: The file '{benchmark_path}' cannot be found.")
-            return None
+        if benchmark_extension == ".pdf":
+            converter = CisBenchmarkConverter(self.workdir)
+            return converter.convert(benchmark_path, "xlsx")
+        elif benchmark_extension == ".xlsx":
+            if not os.path.isfile(benchmark_path):
+                raise FileNotFoundError(f"Benchmark file not found: {benchmark_path}")
+            return benchmark_path
+        else:
+            raise ValueError("Unsupported benchmark file type : " + benchmark_extension)
 
     def __update_values(self, found_values_d):
         for regkey in found_values_d:
@@ -52,38 +50,53 @@ class Orchestrator:
                 self.__proofs_d[regkey] = [found_proofs_d[regkey]]
 
     def audit(self, use_defaults=False):
+        audit_start = time.monotonic()
+
         self.benchmark_path = self.__check_benchmark(self.benchmark_path)
         self.checkExtractor.extract_checks_from_xlsx(self.benchmark_path)
         self.searcher.set_not_unique_key_l(self.checkExtractor.not_unique_key_l)
         self.searcher.list_all_files(self.workdir)
 
         self.helper.log_info("Starting search phase for parsable files")
+        phase_start = time.monotonic()
         self.__regkeys_per_file_d = self.searcher.search_insensitive(self.checkExtractor.checks_l)
-        self.helper.log_info("End of search phase for parsable files")
+        self.helper.log_info(f"End of search phase for parsable files ({self.__format_duration(time.monotonic() - phase_start)})")
 
         self.helper.log_info("Starting parse phase")
+        phase_start = time.monotonic()
         for file, regkeys_l in self.__regkeys_per_file_d.items():
             found_values_d, found_proofs_d = self.parserManager.parse(file, regkeys_l)
             self.__update_values(found_values_d)
             self.__update_proofs(found_proofs_d)
-        self.helper.log_info("End of parse phase")
+        self.helper.log_info(f"End of parse phase ({self.__format_duration(time.monotonic() - phase_start)})")
 
         self.helper.log_info("Starting compliance auditing phase")
+        phase_start = time.monotonic()
         self.comparator.set_checks_l(self.checkExtractor.checks_l)
         self.comparator.set_checks_values_d(self.checkExtractor.checks_values_d)
         self.comparator.set_default_values_d(self.checkExtractor.default_values_d)
         self.comparator.set_use_defaults(use_defaults)
         self.comparator.set_values_d(self.__values_d)
         compliance_l, reason_l = self.comparator.eval_compliance()
-        self.helper.log_info("End of compliance auditing phase")
+        self.helper.log_info(f"End of compliance auditing phase ({self.__format_duration(time.monotonic() - phase_start)})")
 
         if not use_defaults:
             self.__suggest_use_defaults(reason_l)
 
         self.helper.log_info("Starting XLSX writing phase")
+        phase_start = time.monotonic()
         self.xlsxWriter.set_benchmark_xlsx_path(self.benchmark_path)
         self.xlsxWriter.write(self.checkExtractor.checks_l, self.__values_d, self.__proofs_d, compliance_l, reason_l)
-        self.helper.log_info("End of XLSX writing phase")
+        self.helper.log_info(f"End of XLSX writing phase ({self.__format_duration(time.monotonic() - phase_start)})")
+
+        self.helper.log_info(f"Total elapsed time: {self.__format_duration(time.monotonic() - audit_start)}")
+
+    @staticmethod
+    def __format_duration(seconds):
+        minutes, seconds = divmod(seconds, 60)
+        if minutes:
+            return f"{int(minutes)}m{seconds:04.1f}s"
+        return f"{seconds:.2f}s"
 
     def __suggest_use_defaults(self, reason_l):
         missing_count = sum(

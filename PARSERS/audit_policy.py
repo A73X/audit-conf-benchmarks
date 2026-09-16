@@ -22,7 +22,10 @@ class AuditPolicy:
         values_d = {}
         proofs_d = {}
         keyword_uipath_d = self.__extract_keys(regkeys_l)
-        with open(file, "r", errors='ignore', newline='') as f:
+        decode_issues = 0
+        # errors='replace' keeps text structure intact (unlike 'ignore', which silently
+        # drops bytes) and lets us detect + report damaged input instead of hiding it.
+        with open(file, "r", errors='replace', newline='') as f:
             reader = csv.reader(f)
             header = next(reader)  # Ignore header line
             for row in reader:
@@ -31,12 +34,16 @@ class AuditPolicy:
                 len_values = len(values_d.keys())
                 self.helper.log_loading(f"Found {len_values}/{len_uipath} potential values in {file} with {self.name} parser")
 
+                decode_issues += sum(cell.count('�') for cell in row)
                 if len(row) > 4:
                     subcategory = row[2]
                     inclusion_setting = row[4]
                     if subcategory in keyword_uipath_d.keys():
                         values_d[keyword_uipath_d[subcategory]] = inclusion_setting
                         proofs_d[keyword_uipath_d[subcategory]] = file
-        # Logging
+        # Logging (forced to show the final count even if throttled)
+        self.helper.log_loading(f"Found {len(values_d.keys())}/{len(keyword_uipath_d.keys())} potential values in {file} with {self.name} parser", force=True)
         print()
+        if decode_issues:
+            self.helper.log_warning(f"{file} : {decode_issues} unreadable character(s) detected (encoding likely incorrect) — verify this file manually")
         return values_d, proofs_d

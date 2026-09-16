@@ -198,8 +198,11 @@ class Secpol:
         proofs_d = {}
         keyword_uipath_d = self.__extract_keys(regkeys_l)
 
-        with open(file, "r", encoding='utf-16-le', errors='ignore') as f:
+        # errors='replace' keeps text structure intact (unlike 'ignore', which silently
+        # drops bytes) and lets us detect + report damaged input instead of hiding it.
+        with open(file, "r", encoding='utf-16-le', errors='replace') as f:
             lines = f.readlines()
+        decode_issues = sum(line.count('�') for line in lines)
 
         current_section = None
         for line in lines:
@@ -237,7 +240,11 @@ class Secpol:
                     proofs_d[keyword_uipath_d[self.key_to_keyword_mapping[key]]] = file
             elif current_section == "Registry Values":
                 key = key.lower()
-                val_type = int(val.split(',', 1)[0])
+                try:
+                    val_type = int(val.split(',', 1)[0])
+                except ValueError as e:
+                    self.helper.log_warning(f"Skipping malformed Registry Values line in {file}: {l!r} ({type(e).__name__}: {e})")
+                    continue
                 val = val.split(',', 1)[-1].replace('"', '')
                 # String
                 if (val_type == 1) and val.isdigit():
@@ -256,6 +263,9 @@ class Secpol:
                     values_d[keyword_uipath_d[key]] = self.__interprete_value(key, val)
                     proofs_d[keyword_uipath_d[key]] = file
 
-        # Logging
+        # Logging (forced to show the final count even if throttled)
+        self.helper.log_loading(f"Found {len(values_d.keys())}/{len(keyword_uipath_d.keys())} potential values in {file} with {self.name} parser", force=True)
         print()
+        if decode_issues:
+            self.helper.log_warning(f"{file} : {decode_issues} unreadable character(s) detected (encoding likely incorrect) — verify this file manually")
         return values_d, proofs_d
